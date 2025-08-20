@@ -5,6 +5,33 @@
 
 require('dotenv').config();
 
+/**
+ * Construye la cadena de conexión para MongoDB Atlas
+ * @returns {string} Cadena de conexión de Atlas
+ */
+function buildAtlasConnectionString() {
+    const {
+        MONGODB_ATLAS_USERNAME,
+        MONGODB_ATLAS_PASSWORD,
+        MONGODB_ATLAS_CLUSTER,
+        MONGODB_ATLAS_DATABASE = 'fso-automation',
+        MONGODB_ATLAS_RETRY_WRITES = 'true',
+        MONGODB_ATLAS_W = 'majority'
+    } = process.env;
+
+    if (!MONGODB_ATLAS_USERNAME || !MONGODB_ATLAS_PASSWORD || !MONGODB_ATLAS_CLUSTER) {
+        throw new Error('Variables de entorno de MongoDB Atlas no configuradas');
+    }
+
+    const params = new URLSearchParams({
+        retryWrites: MONGODB_ATLAS_RETRY_WRITES,
+        w: MONGODB_ATLAS_W,
+        appName: 'FSO-Automation-Backend'
+    });
+
+    return `mongodb+srv://${MONGODB_ATLAS_USERNAME}:${MONGODB_ATLAS_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/${MONGODB_ATLAS_DATABASE}?${params.toString()}`;
+}
+
 const config = {
     // Configuración del servidor
     server: {
@@ -15,18 +42,41 @@ const config = {
         frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3001'
     },
 
-    // Configuración de base de datos
+    // Configuración de base de datos con soporte para Atlas
     database: {
+        // Usar Atlas en producción o cuando USE_ATLAS esté habilitado
+        connectionString: process.env.NODE_ENV === 'production' || process.env.USE_ATLAS === 'true'
+            ? buildAtlasConnectionString()
+            : process.env.DB_CONNECTION_STRING || 'mongodb://localhost:27017/fso-automation',
+
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 27017,
-        name: process.env.DB_NAME || 'google_forms_automation',
+        name: process.env.DB_NAME || 'fso-automation',
         user: process.env.DB_USER || '',
         password: process.env.DB_PASSWORD || '',
-        connectionString: process.env.DB_CONNECTION_STRING || 'mongodb://localhost:27017/google_forms_automation',
+
+        // Configuración específica de Atlas
+        atlas: {
+            username: process.env.MONGODB_ATLAS_USERNAME,
+            password: process.env.MONGODB_ATLAS_PASSWORD,
+            cluster: process.env.MONGODB_ATLAS_CLUSTER,
+            database: process.env.MONGODB_ATLAS_DATABASE || 'fso-automation',
+            retryWrites: process.env.MONGODB_ATLAS_RETRY_WRITES === 'true',
+            w: process.env.MONGODB_ATLAS_W || 'majority'
+        },
+
+        // Opciones de conexión optimizadas para Atlas
         options: {
             maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
-            minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 5,
-            serverSelectionTimeoutMS: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 30000
+            minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 2,
+            serverSelectionTimeoutMS: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
+            connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
+            socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
+            heartbeatFrequencyMS: parseInt(process.env.DB_HEARTBEAT_FREQUENCY) || 10000,
+            retryWrites: true,
+            w: 'majority',
+            readPreference: 'primary',
+            authSource: 'admin'
         }
     },
 
