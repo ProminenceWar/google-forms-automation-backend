@@ -20,7 +20,7 @@ class SessionController {
 
             // Inicializar servicios si es necesario
             await sessionService.initialize();
-            
+
             // Verificar si ya hay una sesión válida
             if (sessionService.hasValidSession()) {
                 const authStatus = await puppeteerService.checkAuthStatus();
@@ -82,7 +82,7 @@ class SessionController {
             if (sessionStatus.isValid) {
                 try {
                     const authStatus = await puppeteerService.checkAuthStatus();
-                    
+
                     return res.status(200).json({
                         session: {
                             ...sessionStatus,
@@ -97,7 +97,7 @@ class SessionController {
                     });
                 } catch (browserError) {
                     logger.warn('Error checking browser auth status:', browserError);
-                    
+
                     return res.status(200).json({
                         session: {
                             ...sessionStatus,
@@ -198,6 +198,39 @@ class SessionController {
             res.status(500).json({
                 success: false,
                 message: 'Internal server error refreshing session',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    }
+
+    /**
+     * GET /api/session/active
+     * Obtiene las sesiones activas del sistema
+     */
+    async getActiveSessions(req, res) {
+        try {
+            logger.info('Active sessions request received');
+
+            // Obtener información de sesiones activas
+            const sessionStatus = sessionService.getSessionStatus();
+            const activeSessions = sessionService.getActiveSessions();
+
+            res.status(200).json({
+                success: true,
+                message: 'Active sessions retrieved successfully',
+                data: {
+                    sessionStatus: sessionStatus,
+                    activeSessions: activeSessions,
+                    totalActive: activeSessions ? activeSessions.length : 0,
+                    timestamp: new Date().toISOString()
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error getting active sessions:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Internal server error getting active sessions',
                 error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }

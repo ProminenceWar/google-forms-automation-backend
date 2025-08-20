@@ -27,10 +27,10 @@ class SessionService {
         try {
             // Crear directorio de sesiones si no existe
             await this.ensureSessionDirectory();
-            
+
             // Cargar sesión existente si la hay
             await this.loadSession();
-            
+
             logger.info('SessionService initialized successfully');
         } catch (error) {
             logger.error('Error initializing SessionService:', error);
@@ -71,7 +71,7 @@ class SessionService {
             };
 
             await fs.writeFile(this.sessionPath, JSON.stringify(sessionData, null, 2));
-            
+
             this.sessionData = sessionData;
             this.isValid = true;
             this.lastActivity = new Date();
@@ -146,7 +146,7 @@ class SessionService {
         if (!this.isValid || !this.sessionData) {
             return null;
         }
-        
+
         this.lastActivity = new Date();
         return this.sessionData.cookies;
     }
@@ -212,8 +212,39 @@ class SessionService {
         this.sessionData = null;
         this.isValid = false;
         this.lastActivity = null;
-        
+
         logger.info('Session cleared');
+    }
+
+    /**
+     * Obtiene la lista de sesiones activas
+     * @returns {Array} Lista de sesiones activas
+     */
+    getActiveSessions() {
+        try {
+            const sessions = [];
+
+            if (this.hasValidSession()) {
+                sessions.push({
+                    id: 'main-session',
+                    type: 'google-auth',
+                    status: 'active',
+                    lastActivity: this.lastActivity,
+                    isValid: this.isValid,
+                    createdAt: this.sessionData?.createdAt || new Date().toISOString(),
+                    userAgent: this.sessionData?.userAgent || 'Unknown',
+                    metadata: {
+                        cookieCount: this.sessionData?.cookies?.length || 0,
+                        hasAuthToken: !!this.sessionData?.authToken
+                    }
+                });
+            }
+
+            return sessions;
+        } catch (error) {
+            logger.error('Error getting active sessions:', error);
+            return [];
+        }
     }
 }
 

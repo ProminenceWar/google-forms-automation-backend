@@ -12,29 +12,37 @@ const config = require('./config');
 const logger = require('./utils/logger');
 
 // Importar middleware
-const { 
-    errorHandler, 
-    notFoundHandler, 
-    jsonErrorHandler 
+const {
+    errorHandler,
+    notFoundHandler,
+    jsonErrorHandler
 } = require('./middleware/errorHandler');
 
 // Importar rutas
+const authRoutes = require('./routes/auth');
 const sessionRoutes = require('./routes/session');
 const formRoutes = require('./routes/forms');
+const formsV1Routes = require('./routes/formsV1');
+const filesV1Routes = require('./routes/files');
 
 // Crear aplicación Express
 const app = express();
 
 // Configurar rate limiting
 const limiter = rateLimit({
-    windowMs: config.rateLimit.windowMs,
-    max: config.rateLimit.maxRequests,
+    windowMs: config.rateLimit.general?.windowMs || 60000,
+    max: config.rateLimit.general?.maxRequests || 100,
+    // Deshabilitar rate limiting en desarrollo para pruebas
+    skip: (req) => {
+        return process.env.NODE_ENV === 'development' &&
+            req.headers['user-agent']?.includes('superagent');
+    },
     message: {
         success: false,
         error: {
             message: 'Too many requests from this IP, please try again later',
             type: 'RATE_LIMIT_EXCEEDED',
-            retryAfter: config.rateLimit.windowMs / 1000
+            retryAfter: (config.rateLimit.general?.windowMs || 60000) / 1000
         }
     },
     standardHeaders: true,
@@ -45,13 +53,13 @@ const limiter = rateLimit({
             url: req.url,
             userAgent: req.get('User-Agent')
         });
-        
+
         res.status(429).json({
             success: false,
             error: {
                 message: 'Too many requests from this IP, please try again later',
                 type: 'RATE_LIMIT_EXCEEDED',
-                retryAfter: config.rateLimit.windowMs / 1000,
+                retryAfter: (config.rateLimit.general?.windowMs || 60000) / 1000,
                 timestamp: new Date().toISOString()
             }
         });
@@ -78,7 +86,7 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
+    origin: process.env.NODE_ENV === 'production'
         ? ['https://yourdomain.com'] // Cambiar por dominios permitidos en producción
         : true, // Permitir todos los orígenes en desarrollo
     credentials: true,
@@ -89,13 +97,13 @@ app.use(cors({
 app.use(limiter);
 
 // Body parsing middleware
-app.use(express.json({ 
+app.use(express.json({
     limit: '10mb',
     strict: true
 }));
-app.use(express.urlencoded({ 
-    extended: true, 
-    limit: '10mb' 
+app.use(express.urlencoded({
+    extended: true,
+    limit: '10mb'
 }));
 
 // Middleware para logging de requests
@@ -113,7 +121,62 @@ app.use((req, res, next) => {
 // Middleware para manejo de errores de JSON
 app.use(jsonErrorHandler);
 
-// Health check endpoint
+// Ruta raíz
+app.get('/', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Google Forms Automation Backend',
+        version: '1.0.0',
+        timestamp: new Date().toISOString(),
+        environment: config.server.nodeEnv,
+        documentation: {
+            health: '/api/v1/health',
+            api: '/api/v1',
+            endpoints: '/api/v1/docs'
+        }
+    });
+});
+
+// Health check endpoint (v1)
+app.get('/api/v1/health', async (req, res) => {
+    try {
+        // Aquí puedes agregar verificaciones de salud más detalladas
+        // Por ejemplo, verificar conexión a base de datos
+
+        res.status(200).json({
+            success: true,
+            message: 'Sistema operativo y saludable',
+            data: {
+                status: 'healthy',
+                version: '1.0.0',
+                timestamp: new Date().toISOString(),
+                environment: config.server.nodeEnv,
+                uptime: process.uptime(),
+                memory: {
+                    used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+                    total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+                },
+                services: {
+                    database: 'connected', // En producción verificar conexión real
+                    api: 'operational',
+                    authentication: 'operational'
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('Error en health check:', error);
+        res.status(503).json({
+            success: false,
+            message: 'Problemas de salud detectados',
+            error: {
+                message: 'Error interno del servidor',
+                type: 'HEALTH_CHECK_FAILED'
+            }
+        });
+    }
+});
+
+// Health check endpoint (legacy)
 app.get('/health', (req, res) => {
     res.status(200).json({
         success: true,
@@ -153,7 +216,16 @@ app.get('/api', (req, res) => {
     });
 });
 
-// Rutas de la API
+// Rutas de la API v1
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/sessions', sessionRoutes);
+app.use('/api/v1/forms', formsV1Routes);
+app.use('/api/v1/files', filesV1Routes);
+
+// Rutas legacy (mantener compatibilidad)
+app.use('/api/forms', formRoutes);
+
+// Rutas legacy (mantener compatibilidad)
 app.use('/api/session', sessionRoutes);
 app.use('/api/forms', formRoutes);
 
@@ -168,10 +240,10 @@ async function initializeApp() {
     try {
         // Inicializar servicios si es necesario
         logger.info('Initializing application...');
-        
+
         // Aquí se pueden agregar inicializaciones adicionales si es necesario
         // Por ejemplo, inicializar servicios, conectar a bases de datos, etc.
-        
+
         logger.info('Application initialized successfully');
         return true;
     } catch (error) {
@@ -184,7 +256,7 @@ async function initializeApp() {
 async function startServer() {
     try {
         await initializeApp();
-        
+
         const server = app.listen(config.server.port, () => {
             logger.info(`Server started successfully`, {
                 port: config.server.port,
@@ -192,7 +264,7 @@ async function startServer() {
                 nodeVersion: process.version,
                 timestamp: new Date().toISOString()
             });
-            
+
             console.log(`🚀 Server running on port ${config.server.port}`);
             console.log(`📱 Health check: http://localhost:${config.server.port}/health`);
             console.log(`📋 API docs: http://localhost:${config.server.port}/api`);

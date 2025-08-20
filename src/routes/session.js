@@ -28,6 +28,13 @@ router.get('/status', asyncHandler(sessionController.getStatus));
 router.post('/logout', asyncHandler(sessionController.logout));
 
 /**
+ * @route GET /api/session/active
+ * @desc Obtiene las sesiones activas del sistema
+ * @access Public
+ */
+router.get('/active', asyncHandler(sessionController.getActiveSessions));
+
+/**
  * @route POST /api/session/refresh
  * @desc Actualiza la actividad de la sesión
  * @access Public

@@ -17,6 +17,7 @@
     "setup-db": "node scripts/initDatabase.js",
     "connect-atlas": "node scripts/connectToAtlas.js",
     "verify-atlas": "node scripts/verifyAtlasSetup.js",
+    "test-api": "node scripts/testAPIEndpoints.js",
     "playground": "mongosh --file playground-1.mongodb.js",
     "health": "node -e \"const db = require('./src/database/connection'); new db().healthCheck().then(console.log).catch(console.error)\"",
     "logs": "Get-Content logs/app.log -Wait -Tail 50",
