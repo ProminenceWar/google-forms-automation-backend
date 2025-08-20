@@ -1,33 +1,135 @@
-# Dependencies
+# =================================================================
+# GITIGNORE - Google Forms Automation Backend
+# =================================================================
+
+# Dependencias de Node.js
 node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Environment files
+# Archivos de entorno
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.production
-
-# Session files
-sessions/*.json
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de sesión
+sessions/
+sessions/*.json
+session-data/
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
 # Coverage directory used by tools like istanbul
 coverage/
+*.lcov
+.nyc_output/
 
 # Build directories
 dist/
 build/
 
-# IDE files
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =================================================================
+# ESPECÍFICOS DE LA APLICACIÓN
+# =================================================================
+
+# Directorio de almacenamiento local
+storage/
+uploads/
+downloads/
+
+# Archivos de base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificados y claves
+*.pem
+*.key
+*.crt
+*.cert
+
+# Archivos de backup
+backup/
+*.backup
+*.bak
+
+# Archivos temporales de procesamiento
+processing/
+temp-files/
+
+# Reportes generados
+reports/generated/
+*.pdf.tmp
+
+# Cache de Puppeteer
+.puppeteer-cache/
+chrome-profile/
+
+# Archivos de configuración específicos del entorno
+config/local.js
+config/production.js
+config/development.js
+
+# Documentación generada
+docs/generated/
+jsdoc-output/
+
+# Archivos de test
+test-results/
+test-coverage/
+coverage-reports/
+
+# Archivos de monitoreo
+monitoring/
+metrics/
+
+# Archivos de migración temporal
+migrations/temp/
+
+# Archivos de debugging
+debug.log
+*.debug
+
+# Archivos de prueba
+test-data/
+mock-data/
+sample-files/
+
+# Scripts personales
+scripts/personal/
+scripts/dev/
 .vscode/
 .idea/
 *.swp

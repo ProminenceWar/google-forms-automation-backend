@@ -1,6 +1,8 @@
 # Google Forms Automation Backend
 
-Backend completo y funcional en Node.js para automatizar el envío de formularios de Google con manejo de sesión persistente.
+## 📋 Descripción
+
+Backend API para la automatización de formularios FSO (Field Service Operations) con gestión integral de datos, procesamiento de archivos PDF, y sistema de autenticación robusto.
 
 ## 🚀 Características
 
@@ -114,9 +116,11 @@ El servidor iniciará en `http://localhost:3000` (o el puerto configurado en `.e
 ### 🔐 Gestión de Sesión
 
 #### `POST /api/session/login`
+
 Inicia el proceso de login manual en Google.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -127,9 +131,11 @@ Inicia el proceso de login manual en Google.
 ```
 
 #### `GET /api/session/status`
+
 Verifica el estado actual de la sesión.
 
 **Response:**
+
 ```json
 {
   "session": {
@@ -146,17 +152,21 @@ Verifica el estado actual de la sesión.
 ```
 
 #### `POST /api/session/logout`
+
 Cierra la sesión actual y limpia cookies.
 
 #### `POST /api/session/refresh`
+
 Actualiza la actividad de la sesión.
 
 ### 📝 Gestión de Formularios
 
 #### `POST /api/forms/submit`
+
 Envía datos a un formulario de Google.
 
 **Request Body:**
+
 ```json
 {
   "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSexample/viewform",
@@ -169,6 +179,7 @@ Envía datos a un formulario de Google.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -181,12 +192,15 @@ Envía datos a un formulario de Google.
 ```
 
 #### `GET /api/forms/mock-data`
+
 Obtiene datos de prueba para formularios.
 
 **Query Parameters:**
+
 - `type` (opcional): Tipo específico de datos (`basic`, `detailed`, `survey`, `contact`)
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -201,15 +215,19 @@ Obtiene datos de prueba para formularios.
 ```
 
 #### `GET /api/forms/validate-url`
+
 Valida si una URL es un formulario de Google válido.
 
 **Query Parameters:**
+
 - `url`: URL del formulario a validar
 
 #### `POST /api/forms/test-submit`
+
 Realiza una prueba de envío con datos mock.
 
 **Request Body:**
+
 ```json
 {
   "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSexample/viewform",
@@ -220,36 +238,40 @@ Realiza una prueba de envío con datos mock.
 ### 🔍 Utilidades
 
 #### `GET /health`
+
 Health check del servidor.
 
 #### `GET /api`
+
 Documentación de la API.
 
 ## 🔧 Configuración Avanzada
 
 ### Variables de Entorno Disponibles
 
-| Variable | Descripción | Valor por Defecto |
-|----------|-------------|-------------------|
-| `PORT` | Puerto del servidor | `3000` |
-| `NODE_ENV` | Entorno de ejecución | `development` |
-| `GOOGLE_FORM_URL` | URL del formulario por defecto | - |
-| `SESSION_TIMEOUT` | Timeout de inactividad (ms) | `3600000` (1h) |
-| `MAX_SESSION_AGE` | Edad máxima de sesión (ms) | `86400000` (24h) |
-| `MAX_REQUESTS_PER_WINDOW` | Límite de requests | `100` |
-| `RATE_LIMIT_WINDOW` | Ventana de rate limit (ms) | `900000` (15min) |
-| `LOG_LEVEL` | Nivel de logging | `info` |
-| `LOG_FILE` | Archivo de logs | `logs/app.log` |
+| Variable                  | Descripción                    | Valor por Defecto |
+| ------------------------- | ------------------------------ | ----------------- |
+| `PORT`                    | Puerto del servidor            | `3000`            |
+| `NODE_ENV`                | Entorno de ejecución           | `development`     |
+| `GOOGLE_FORM_URL`         | URL del formulario por defecto | -                 |
+| `SESSION_TIMEOUT`         | Timeout de inactividad (ms)    | `3600000` (1h)    |
+| `MAX_SESSION_AGE`         | Edad máxima de sesión (ms)     | `86400000` (24h)  |
+| `MAX_REQUESTS_PER_WINDOW` | Límite de requests             | `100`             |
+| `RATE_LIMIT_WINDOW`       | Ventana de rate limit (ms)     | `900000` (15min)  |
+| `LOG_LEVEL`               | Nivel de logging               | `info`            |
+| `LOG_FILE`                | Archivo de logs                | `logs/app.log`    |
 
 ### Estructura de Logs
 
 Los logs se almacenan en:
+
 - `logs/app.log` - Logs generales
 - `logs/app-error.log` - Solo errores
 
 ### Gestión de Sesión
 
 Las sesiones se almacenan en:
+
 - `sessions/session.json` - Cookies de sesión
 - `sessions/chrome-profile/` - Perfil de Chrome (Puppeteer)
 
@@ -258,26 +280,31 @@ Las sesiones se almacenan en:
 ### Probar la API
 
 1. **Health Check:**
+
 ```bash
 curl http://localhost:3000/health
 ```
 
 2. **Iniciar sesión:**
+
 ```bash
 curl -X POST http://localhost:3000/api/session/login
 ```
 
 3. **Verificar estado:**
+
 ```bash
 curl http://localhost:3000/api/session/status
 ```
 
 4. **Obtener datos mock:**
+
 ```bash
 curl http://localhost:3000/api/forms/mock-data?type=basic
 ```
 
 5. **Enviar formulario de prueba:**
+
 ```bash
 curl -X POST http://localhost:3000/api/forms/test-submit \
   -H "Content-Type: application/json" \
