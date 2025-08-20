@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
-
+const { File } = require('../models');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -40,60 +40,37 @@ router.get('/', authenticateToken, async (req, res) => {
     try {
         const { page = 1, limit = 10, category, type } = req.query;
 
-        // Simulación de archivos
-        const mockFiles = [
-            {
-                id: 'file_001',
-                name: 'Formulario_FSO_001.pdf',
-                originalName: 'Formulario FSO - Orden 001.pdf',
-                size: 2048576,
-                mimeType: 'application/pdf',
-                category: 'fso-form',
-                uploadedBy: req.user.id,
-                uploadedAt: '2025-08-19T20:00:00.000Z',
-                url: '/files/file_001.pdf',
-                metadata: {
-                    formId: 'fso_001',
-                    processed: true,
-                    pages: 3
-                }
-            },
-            {
-                id: 'file_002',
-                name: 'Imagen_Instalacion_001.jpg',
-                originalName: 'Instalación Completada.jpg',
-                size: 1024000,
-                mimeType: 'image/jpeg',
-                category: 'installation-photo',
-                uploadedBy: req.user.id,
-                uploadedAt: '2025-08-19T19:30:00.000Z',
-                url: '/files/file_002.jpg',
-                metadata: {
-                    formId: 'fso_001',
-                    processed: true,
-                    dimensions: '1920x1080'
-                }
-            }
-        ];
+        // Obtener archivos desde MongoDB
+        const filter = {};
 
-        // Filtrar por categoría si se especifica
-        let filteredFiles = mockFiles;
         if (category) {
-            filteredFiles = mockFiles.filter(file => file.category === category);
-        }
-        if (type) {
-            filteredFiles = filteredFiles.filter(file => file.mimeType.includes(type));
+            filter['metadatos.categoria'] = category;
         }
 
-        // Paginación simulada
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+        if (type) {
+            filter.mimeType = { $regex: type, $options: 'i' };
+        }
+
+        // Calcular skip y limit para paginación
+        const skip = (page - 1) * limit;
+        const limitNum = parseInt(limit);
+
+        // Obtener archivos con paginación
+        const files = await File.find(filter)
+            .sort({ fechaCreacion: -1 })
+            .skip(skip)
+            .limit(limitNum)
+            .populate('relaciones.formularioFSO', 'numeroOrden tipoFSO')
+            .populate('relaciones.usuario', 'name email')
+            .lean();
+
+        // Obtener total de documentos para paginación
+        const totalFiles = await File.countDocuments(filter);
 
         logger.info('Archivos listados exitosamente:', {
             userId: req.user.id,
-            total: filteredFiles.length,
-            returned: paginatedFiles.length,
+            total: totalFiles,
+            returned: files.length,
             page,
             limit
         });
@@ -102,12 +79,12 @@ router.get('/', authenticateToken, async (req, res) => {
             success: true,
             message: 'Archivos obtenidos exitosamente',
             data: {
-                files: paginatedFiles,
+                files: files,
                 pagination: {
                     currentPage: parseInt(page),
-                    totalPages: Math.ceil(filteredFiles.length / limit),
-                    totalFiles: filteredFiles.length,
-                    limit: parseInt(limit)
+                    totalPages: Math.ceil(totalFiles / limitNum),
+                    totalFiles: totalFiles,
+                    limit: limitNum
                 }
             }
         });
@@ -147,28 +124,35 @@ router.post('/upload', authenticateToken, async (req, res) => {
             });
         }
 
-        // Simulación de archivo subido
-        const uploadedFile = {
-            id: `file_${Date.now()}`,
-            name: filename,
-            originalName: filename,
-            size: Math.floor(Math.random() * 5000000) + 100000, // 100KB a 5MB
+        // Crear nuevo archivo en MongoDB
+        const newFile = new File({
+            nombre: filename,
+            nombreArchivo: `${Date.now()}_${filename}`,
+            extension: filename.split('.').pop().toLowerCase(),
             mimeType: getMimeType(filename),
-            category: category,
-            description: description || '',
-            uploadedBy: req.user.id,
-            uploadedAt: new Date().toISOString(),
-            url: `/files/${filename}`,
-            metadata: {
-                processed: false,
-                hash: generateFileHash()
+            tamaño: Math.floor(Math.random() * 5000000) + 100000, // Simulado por ahora
+            hash: generateFileHash(),
+            storage: {
+                tipo: 'local',
+                ruta: `/storage/files/${Date.now()}_${filename}`,
+                url: `/api/files/${Date.now()}_${filename}`
+            },
+            relaciones: {
+                usuario: req.user.id // En producción, usar ObjectId real
+            },
+            metadatos: {
+                descripcion: description || '',
+                categoria: category || 'documento',
+                origen: 'upload'
             }
-        };
+        });
+
+        const savedFile = await newFile.save();
 
         logger.info('Archivo subido exitosamente:', {
-            fileId: uploadedFile.id,
-            filename: uploadedFile.name,
-            size: uploadedFile.size,
+            fileId: savedFile.fileId,
+            filename: savedFile.nombre,
+            size: savedFile.tamaño,
             userId: req.user.id
         });
 
@@ -176,7 +160,7 @@ router.post('/upload', authenticateToken, async (req, res) => {
             success: true,
             message: 'Archivo subido exitosamente',
             data: {
-                file: uploadedFile
+                file: savedFile
             }
         });
 
@@ -204,31 +188,26 @@ router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Simulación de archivo
-        const mockFile = {
-            id: id,
-            name: `archivo_${id}.pdf`,
-            originalName: `Archivo Original ${id}.pdf`,
-            size: 2048576,
-            mimeType: 'application/pdf',
-            category: 'fso-form',
-            description: 'Archivo de formulario FSO',
-            uploadedBy: req.user.id,
-            uploadedAt: '2025-08-19T20:00:00.000Z',
-            url: `/files/${id}.pdf`,
-            metadata: {
-                processed: true,
-                hash: generateFileHash(),
-                pages: 3,
-                version: 1
-            },
-            permissions: {
-                canView: true,
-                canEdit: true,
-                canDelete: true,
-                canShare: true
-            }
-        };
+        // Obtener archivo desde MongoDB
+        const file = await File.findOne({
+            $or: [
+                { fileId: id },
+                { _id: id }
+            ]
+        })
+            .populate('relaciones.formularioFSO', 'numeroOrden tipoFSO')
+            .populate('relaciones.usuario', 'name email')
+            .lean();
+
+        if (!file) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    message: 'Archivo no encontrado',
+                    type: 'NOT_FOUND'
+                }
+            });
+        }
 
         logger.info('Archivo obtenido exitosamente:', {
             fileId: id,
@@ -239,7 +218,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             success: true,
             message: 'Archivo obtenido exitosamente',
             data: {
-                file: mockFile
+                file: file
             }
         });
 

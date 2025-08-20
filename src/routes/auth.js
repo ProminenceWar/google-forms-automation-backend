@@ -7,12 +7,9 @@ const express = require('express');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-
+const { User } = require('../models');
 const config = require('../config');
 const logger = require('../utils/logger');
-
-// Importar modelos (simulados por ahora)
-// const User = require('../models/User');
 
 const router = express.Router();
 
@@ -83,8 +80,86 @@ const registerValidators = [
 ];
 
 /**
- * POST /api/v1/auth/login
- * Inicia sesión con email y contraseña
+ * @swagger
+ * components:
+ *   schemas:
+ *     LoginRequest:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           example: admin@fso-automation.com
+ *         password:
+ *           type: string
+ *           format: password
+ *           example: admin123
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           example: true
+ *         message:
+ *           type: string
+ *           example: "Login exitoso"
+ *         data:
+ *           type: object
+ *           properties:
+ *             user:
+ *               $ref: '#/components/schemas/User'
+ *             token:
+ *               type: string
+ *               example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *             refreshToken:
+ *               type: string
+ *               example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *             expiresIn:
+ *               type: string
+ *               example: "1h"
+ */
+
+/**
+ * @swagger
+ * /api/v1/auth/login:
+ *   post:
+ *     summary: Iniciar sesión
+ *     description: Autentica un usuario con email y contraseña, retorna JWT tokens
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: Login exitoso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       400:
+ *         description: Datos de entrada inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Credenciales inválidas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', loginValidators, async (req, res) => {
     try {
@@ -104,38 +179,10 @@ router.post('/login', loginValidators, async (req, res) => {
 
         const { email, password } = req.body;
 
-        // Simulación de búsqueda de usuario (implementar con MongoDB)
-        const mockUsers = {
-            'admin@fso-automation.com': {
-                id: '1',
-                email: 'admin@fso-automation.com',
-                password: '$2a$12$OfSsSBuiV9ey5BPVquwIr.NnzB..bGZWXrjjlmYPbx/sDPs1B7c2i', // admin123
-                name: 'Administrador Sistema',
-                role: 'admin',
-                company: 'FSO Automation Corp',
-                active: true
-            },
-            'supervisor@techinstall.com': {
-                id: '2',
-                email: 'supervisor@techinstall.com',
-                password: '$2a$12$OfSsSBuiV9ey5BPVquwIr.NnzB..bGZWXrjjlmYPbx/sDPs1B7c2i', // admin123
-                name: 'María González',
-                role: 'supervisor',
-                company: 'TechInstall Corp',
-                active: true
-            },
-            'tecnico@techinstall.com': {
-                id: '3',
-                email: 'tecnico@techinstall.com',
-                password: '$2a$12$OfSsSBuiV9ey5BPVquwIr.NnzB..bGZWXrjjlmYPbx/sDPs1B7c2i', // admin123
-                name: 'Carlos López',
-                role: 'tecnico',
-                company: 'TechInstall Corp',
-                active: true
-            }
-        };
-
-        const user = mockUsers[email];
+        // Buscar usuario en MongoDB
+        const user = await User.findOne({ email: email.toLowerCase() })
+            .select('+password') // Incluir password ya que está marcado como select: false
+            .lean();
 
         if (!user || !user.active) {
             logger.warn('Intento de login con usuario inexistente o inactivo:', { email });
@@ -193,7 +240,7 @@ router.post('/login', loginValidators, async (req, res) => {
                 token: accessToken,
                 refreshToken: refreshToken,
                 user: {
-                    id: user.id,
+                    id: user._id,
                     email: user.email,
                     name: user.name,
                     role: user.role,
@@ -201,6 +248,13 @@ router.post('/login', loginValidators, async (req, res) => {
                 },
                 expiresIn: config.jwt.expiresIn
             }
+        });
+
+        // Actualizar último login
+        await User.findByIdAndUpdate(user._id, {
+            lastLogin: new Date(),
+            loginAttempts: 0,
+            lockUntil: null
         });
 
     } catch (error) {
@@ -243,29 +297,39 @@ router.post('/register', registerValidators, async (req, res) => {
 
         const { email, password, name, role, company } = req.body;
 
-        // Simulación - en producción verificar si el usuario ya existe
-        // const existingUser = await User.findOne({ email });
+        // Verificar si el usuario ya existe
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    message: 'El usuario ya existe',
+                    type: 'USER_EXISTS',
+                    code: 'AUTH_006'
+                }
+            });
+        }
 
         // Hash de la contraseña
         const hashedPassword = await bcryptjs.hash(password, config.encryption.saltRounds);
 
-        // Simulación de creación de usuario
-        const newUser = {
-            id: Date.now().toString(),
-            email,
+        // Crear nuevo usuario
+        const newUser = new User({
+            email: email.toLowerCase(),
             password: hashedPassword,
             name,
             role,
             company,
-            active: true,
-            createdAt: new Date().toISOString()
-        };
+            active: true
+        });
+
+        const savedUser = await newUser.save();
 
         logger.info('Usuario registrado exitosamente:', {
-            userId: newUser.id,
-            email: newUser.email,
-            role: newUser.role,
-            company: newUser.company
+            userId: savedUser._id,
+            email: savedUser.email,
+            role: savedUser.role,
+            company: savedUser.company
         });
 
         res.status(201).json({
@@ -273,11 +337,11 @@ router.post('/register', registerValidators, async (req, res) => {
             message: 'Usuario registrado exitosamente',
             data: {
                 user: {
-                    id: newUser.id,
-                    email: newUser.email,
-                    name: newUser.name,
-                    role: newUser.role,
-                    company: newUser.company
+                    id: savedUser._id,
+                    email: savedUser.email,
+                    name: savedUser.name,
+                    role: savedUser.role,
+                    company: savedUser.company
                 }
             }
         });
@@ -301,37 +365,83 @@ router.post('/register', registerValidators, async (req, res) => {
 });
 
 /**
- * GET /api/v1/auth/profile
- * Obtiene el perfil del usuario autenticado
+ * @swagger
+ * /api/v1/auth/profile:
+ *   get:
+ *     summary: Obtener perfil de usuario
+ *     description: Retorna la información del perfil del usuario autenticado
+ *     tags: [Autenticación]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Perfil obtenido exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Perfil obtenido exitosamente"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Token de acceso requerido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Token inválido o expirado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/profile', authenticateToken, async (req, res) => {
     try {
-        // Simulación - obtener datos completos del usuario
-        const userProfile = {
-            id: req.user.id,
-            email: req.user.email,
-            name: 'Usuario Simulado',
-            role: req.user.role,
-            company: req.user.company,
-            active: true,
-            lastLogin: new Date().toISOString(),
-            profile: {
-                phone: '+52 555 123 4567',
-                timezone: 'America/Mexico_City',
-                language: 'es'
-            },
-            preferences: {
-                emailNotifications: true,
-                pushNotifications: true,
-                theme: 'light'
-            }
-        };
+        // Obtener datos completos del usuario desde MongoDB
+        const userProfile = await User.findById(req.user.id).lean();
+
+        if (!userProfile) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    message: 'Usuario no encontrado',
+                    type: 'NOT_FOUND',
+                    code: 'AUTH_007'
+                }
+            });
+        }
 
         res.status(200).json({
             success: true,
             message: 'Perfil obtenido exitosamente',
             data: {
-                user: userProfile
+                user: {
+                    id: userProfile._id,
+                    email: userProfile.email,
+                    name: userProfile.name,
+                    role: userProfile.role,
+                    company: userProfile.company,
+                    active: userProfile.active,
+                    lastLogin: userProfile.lastLogin,
+                    profile: userProfile.profile,
+                    preferences: userProfile.preferences
+                }
             }
         });
 

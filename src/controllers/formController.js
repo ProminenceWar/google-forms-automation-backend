@@ -3,7 +3,7 @@
 
 const puppeteerService = require('../services/puppeteerService');
 const sessionService = require('../services/sessionService');
-const { getAllMockData, getRandomMockData } = require('../utils/mockData');
+const { FSOForm } = require('../models');
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -15,7 +15,7 @@ const config = require('../config');
 function isValidGoogleFormUrl(url) {
     try {
         const urlObj = new URL(url);
-        
+
         // Verificar dominio
         if (!urlObj.hostname.includes('docs.google.com')) {
             return false;
@@ -101,9 +101,9 @@ class FormController {
             }
 
             // Enviar formulario
-            logger.info('Submitting form', { 
-                formUrl, 
-                dataFields: Object.keys(formData).length 
+            logger.info('Submitting form', {
+                formUrl,
+                dataFields: Object.keys(formData).length
             });
 
             const result = await puppeteerService.submitGoogleForm(formUrl, formData);
@@ -139,50 +139,39 @@ class FormController {
     }
 
     /**
-     * GET /api/forms/mock-data
-     * Obtiene datos de prueba para formularios
+     * GET /api/forms/sample-data
+     * Obtiene datos de muestra desde MongoDB
      */
-    async getMockData(req, res) {
+    async getSampleData(req, res) {
         try {
-            logger.info('Mock data request received');
+            logger.info('Sample data request received');
 
-            const { type } = req.query;
+            // Obtener formularios de muestra desde MongoDB
+            const sampleForms = await FSOForm.find()
+                .limit(5)
+                .sort({ fechaCreacion: -1 })
+                .select('numeroOrden tipoFSO companiaInspeccion nombreTecnico estado fechaCreacion');
 
-            if (type) {
-                // Obtener datos específicos por tipo
-                const allMockData = getAllMockData();
-                
-                if (!allMockData[type]) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `Invalid mock data type: ${type}`,
-                        availableTypes: Object.keys(allMockData)
-                    });
-                }
-
-                res.status(200).json({
-                    success: true,
-                    type,
-                    data: allMockData[type],
-                    availableTypes: Object.keys(allMockData)
-                });
-            } else {
-                // Obtener datos aleatorios
-                const randomData = getRandomMockData();
-                
-                res.status(200).json({
-                    success: true,
-                    ...randomData,
-                    availableTypes: Object.keys(getAllMockData()),
-                    note: 'Use ?type=<type> to get specific mock data type'
+            if (sampleForms.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No sample data found in database',
+                    suggestion: 'Run the insertSampleData script to populate sample data'
                 });
             }
 
+            res.status(200).json({
+                success: true,
+                message: 'Sample data retrieved successfully',
+                data: sampleForms,
+                count: sampleForms.length
+            });
+
         } catch (error) {
-            logger.error('Error in mock data controller:', error);
+            logger.error('Error in sample data controller:', error);
             res.status(500).json({
                 success: false,
-                message: 'Internal server error getting mock data',
+                message: 'Internal server error getting sample data',
                 error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }
@@ -204,7 +193,7 @@ class FormController {
             }
 
             const isValid = isValidGoogleFormUrl(url);
-            
+
             res.status(200).json({
                 success: true,
                 isValid,
@@ -253,40 +242,49 @@ class FormController {
                 });
             }
 
-            // Obtener datos mock
-            let mockData;
+            // Obtener datos de muestra desde MongoDB
+            let sampleData;
             if (mockType) {
-                const allMockData = getAllMockData();
-                mockData = allMockData[mockType];
-                if (!mockData) {
+                // Buscar un formulario específico por tipo
+                const sampleForm = await FSOForm.findOne({ tipoFSO: mockType });
+                if (!sampleForm) {
                     return res.status(400).json({
                         success: false,
-                        message: `Invalid mock type: ${mockType}`,
-                        availableTypes: Object.keys(allMockData)
+                        message: `No sample data found for type: ${mockType}`,
+                        suggestion: 'Run the insertSampleData script to populate sample data'
                     });
                 }
+                sampleData = sampleForm.toFormData();
             } else {
-                const randomMock = getRandomMockData();
-                mockData = randomMock.data;
-                mockType = randomMock.type;
+                // Obtener un formulario aleatorio
+                const randomForm = await FSOForm.aggregate([{ $sample: { size: 1 } }]);
+                if (randomForm.length === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'No sample data found in database',
+                        suggestion: 'Run the insertSampleData script to populate sample data'
+                    });
+                }
+                sampleData = randomForm[0];
+                mockType = sampleData.tipoFSO;
             }
 
             // Realizar envío de prueba
-            const result = await puppeteerService.submitGoogleForm(formUrl, mockData);
+            const result = await puppeteerService.submitGoogleForm(formUrl, sampleData);
 
             logger.info('Test form submission completed', {
                 success: result.success,
-                mockType,
+                sampleType: mockType,
                 filledFields: result.filledFields
             });
 
             res.status(200).json({
                 success: result.success,
-                message: `Test submission completed using ${mockType} mock data`,
+                message: `Test submission completed using ${mockType} sample data`,
                 details: {
                     formUrl,
-                    mockType,
-                    mockData,
+                    sampleType: mockType,
+                    sampleData,
                     filledFields: result.filledFields,
                     totalDataProvided: result.totalDataProvided,
                     finalUrl: result.finalUrl,

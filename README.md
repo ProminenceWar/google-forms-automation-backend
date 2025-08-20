@@ -12,7 +12,8 @@ Backend API para la automatización de formularios FSO (Field Service Operations
 - ✅ Logging con Winston
 - ✅ Middleware de seguridad (Helmet, CORS, Rate Limiting)
 - ✅ Manejo centralizado de errores
-- ✅ Datos de prueba (mock data) incluidos
+- ✅ Integración completa con MongoDB Atlas
+- ✅ Datos reales desde base de datos
 - ✅ Configuración flexible con variables de entorno
 - ✅ Estructura de carpetas escalable
 
@@ -36,7 +37,7 @@ src/
 │   └── puppeteerService.js  # Servicio de automatización
 └── utils/
     ├── logger.js            # Configuración de logging
-    └── mockData.js          # Datos de prueba
+    └── logger.js           # Sistema de logging
 ```
 
 ## 🛠️ Instalación
@@ -191,26 +192,27 @@ Envía datos a un formulario de Google.
 }
 ```
 
-#### `GET /api/forms/mock-data`
+#### `GET /api/forms/sample-data`
 
-Obtiene datos de prueba para formularios.
-
-**Query Parameters:**
-
-- `type` (opcional): Tipo específico de datos (`basic`, `detailed`, `survey`, `contact`)
+Obtiene datos de muestra desde MongoDB.
 
 **Response:**
 
 ```json
 {
   "success": true,
-  "type": "basic",
-  "data": {
-    "name": "Juan Pérez",
-    "email": "juan.perez@example.com",
-    "phone": "+52 55 1234 5678",
-    "message": "Este es un mensaje de prueba"
-  }
+  "message": "Sample data retrieved successfully",
+  "data": [
+    {
+      "_id": "...",
+      "numeroOrden": "ORD-2025-001",
+      "tipoFSO": "instalacion",
+      "companiaInspeccion": "TecNetwork Solutions",
+      "nombreTecnico": "Juan Pérez Martínez",
+      "estado": "completado"
+    }
+  ],
+  "count": 3
 }
 ```
 
@@ -300,7 +302,7 @@ curl http://localhost:3000/api/session/status
 4. **Obtener datos mock:**
 
 ```bash
-curl http://localhost:3000/api/forms/mock-data?type=basic
+curl http://localhost:3000/api/forms/sample-data
 ```
 
 5. **Enviar formulario de prueba:**

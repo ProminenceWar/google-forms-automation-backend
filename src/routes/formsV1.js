@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
-
+const { FSOForm } = require('../models');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -33,8 +33,106 @@ const authenticateToken = (req, res, next) => {
 };
 
 /**
- * GET /api/v1/forms
- * Lista todos los formularios FSO
+ * @swagger
+ * /api/v1/forms:
+ *   get:
+ *     summary: Listar formularios FSO
+ *     description: Obtiene una lista paginada de formularios de órdenes de servicio
+ *     tags: [Formularios FSO]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Número de página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Elementos por página
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, in_progress, completed, cancelled]
+ *         description: Filtrar por estado
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Buscar en título, número de orden o cliente
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: Campo para ordenar
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Orden de clasificación
+ *     responses:
+ *       200:
+ *         description: Formularios obtenidos exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Formularios obtenidos exitosamente"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     forms:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/FormFSO'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         currentPage:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
+ *                         totalForms:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: integer
+ *                         completed:
+ *                           type: integer
+ *                         pending:
+ *                           type: integer
+ *                         inProgress:
+ *                           type: integer
+ *       401:
+ *         description: Token de acceso requerido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/', authenticateToken, async (req, res) => {
     try {
@@ -47,114 +145,51 @@ router.get('/', authenticateToken, async (req, res) => {
             sortOrder = 'desc'
         } = req.query;
 
-        // Simulación de formularios FSO
-        const mockForms = [
-            {
-                id: 'fso_001',
-                orderNumber: 'ORD-2025-001',
-                title: 'Instalación Fibra Óptica - Cliente Premium',
-                description: 'Instalación de servicio de fibra óptica para cliente corporativo',
-                status: 'completed',
-                priority: 'high',
-                assignedTo: 'tech_001',
-                customer: {
-                    name: 'Empresa ABC S.A.',
-                    address: 'Av. Principal 123, Ciudad',
-                    phone: '+1234567890',
-                    email: 'contacto@empresaabc.com'
-                },
-                installation: {
-                    type: 'fiber_optic',
-                    speed: '1000mbps',
-                    equipment: ['ONT-1000', 'Router-Pro', 'Cable-50m'],
-                    scheduledDate: '2025-08-20T09:00:00.000Z',
-                    completedDate: '2025-08-19T16:30:00.000Z'
-                },
-                createdBy: 'admin_001',
-                createdAt: '2025-08-18T10:00:00.000Z',
-                updatedAt: '2025-08-19T16:30:00.000Z',
-                metadata: {
-                    submissionCount: 1,
-                    lastSubmission: '2025-08-19T16:30:00.000Z',
-                    estimatedDuration: 240, // minutos
-                    actualDuration: 210
-                }
-            },
-            {
-                id: 'fso_002',
-                orderNumber: 'ORD-2025-002',
-                title: 'Mantenimiento Rutinario - Zona Norte',
-                description: 'Mantenimiento preventivo de equipos en sector norte',
-                status: 'pending',
-                priority: 'medium',
-                assignedTo: 'tech_002',
-                customer: {
-                    name: 'Condominio Torres del Norte',
-                    address: 'Calle Norte 456, Ciudad',
-                    phone: '+1234567891',
-                    email: 'admin@torresnorte.com'
-                },
-                installation: {
-                    type: 'maintenance',
-                    scope: 'preventive',
-                    equipment: ['Switch-24p', 'Patch-Panel', 'Cable-Tester'],
-                    scheduledDate: '2025-08-21T14:00:00.000Z',
-                    completedDate: null
-                },
-                createdBy: 'admin_001',
-                createdAt: '2025-08-19T08:00:00.000Z',
-                updatedAt: '2025-08-19T08:00:00.000Z',
-                metadata: {
-                    submissionCount: 0,
-                    lastSubmission: null,
-                    estimatedDuration: 180,
-                    actualDuration: null
-                }
-            }
-        ];
-
-        // Aplicar filtros
-        let filteredForms = mockForms;
+        // Obtener formularios FSO desde MongoDB
+        const filter = {};
 
         if (status) {
-            filteredForms = filteredForms.filter(form => form.status === status);
+            filter.estado = status;
         }
 
         if (search) {
-            const searchLower = search.toLowerCase();
-            filteredForms = filteredForms.filter(form =>
-                form.title.toLowerCase().includes(searchLower) ||
-                form.orderNumber.toLowerCase().includes(searchLower) ||
-                form.customer.name.toLowerCase().includes(searchLower)
-            );
+            filter.$or = [
+                { numeroOrden: { $regex: search, $options: 'i' } },
+                { 'datosCliente.nombre': { $regex: search, $options: 'i' } },
+                { nombreTecnico: { $regex: search, $options: 'i' } }
+            ];
         }
 
-        // Aplicar ordenamiento
-        filteredForms.sort((a, b) => {
-            let valueA = a[sortBy];
-            let valueB = b[sortBy];
+        // Calcular skip y limit para paginación
+        const skip = (page - 1) * limit;
+        const limitNum = parseInt(limit);
 
-            if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
-                valueA = new Date(valueA);
-                valueB = new Date(valueB);
-            }
+        // Construir sort object
+        const sortObj = {};
+        sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-            if (sortOrder === 'desc') {
-                return valueB > valueA ? 1 : -1;
-            } else {
-                return valueA > valueB ? 1 : -1;
-            }
-        });
+        // Obtener formularios con paginación
+        const forms = await FSOForm.find(filter)
+            .sort(sortObj)
+            .skip(skip)
+            .limit(limitNum)
+            .lean();
 
-        // Paginación
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedForms = filteredForms.slice(startIndex, endIndex);
+        // Obtener total de documentos para paginación
+        const totalForms = await FSOForm.countDocuments(filter);
+
+        // Obtener estadísticas de resumen
+        const [totalCount, completedCount, pendingCount, inProgressCount] = await Promise.all([
+            FSOForm.countDocuments(),
+            FSOForm.countDocuments({ estado: 'completado' }),
+            FSOForm.countDocuments({ estado: 'pendiente' }),
+            FSOForm.countDocuments({ estado: 'en_progreso' })
+        ]);
 
         logger.info('Formularios listados exitosamente:', {
             userId: req.user.id,
-            total: filteredForms.length,
-            returned: paginatedForms.length,
+            total: totalForms,
+            returned: forms.length,
             filters: { status, search },
             page,
             limit
@@ -164,18 +199,18 @@ router.get('/', authenticateToken, async (req, res) => {
             success: true,
             message: 'Formularios obtenidos exitosamente',
             data: {
-                forms: paginatedForms,
+                forms: forms,
                 pagination: {
                     currentPage: parseInt(page),
-                    totalPages: Math.ceil(filteredForms.length / limit),
-                    totalForms: filteredForms.length,
-                    limit: parseInt(limit)
+                    totalPages: Math.ceil(totalForms / limitNum),
+                    totalForms: totalForms,
+                    limit: limitNum
                 },
                 summary: {
-                    total: mockForms.length,
-                    completed: mockForms.filter(f => f.status === 'completed').length,
-                    pending: mockForms.filter(f => f.status === 'pending').length,
-                    inProgress: mockForms.filter(f => f.status === 'in_progress').length
+                    total: totalCount,
+                    completed: completedCount,
+                    pending: pendingCount,
+                    inProgress: inProgressCount
                 }
             }
         });
@@ -319,68 +354,23 @@ router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Simulación de formulario específico
-        const mockForm = {
-            id: id,
-            orderNumber: `ORD-2025-${id.slice(-3)}`,
-            title: 'Instalación Fibra Óptica - Cliente Premium',
-            description: 'Instalación de servicio de fibra óptica para cliente corporativo',
-            status: 'completed',
-            priority: 'high',
-            assignedTo: 'tech_001',
-            customer: {
-                name: 'Empresa ABC S.A.',
-                address: 'Av. Principal 123, Ciudad',
-                phone: '+1234567890',
-                email: 'contacto@empresaabc.com'
-            },
-            installation: {
-                type: 'fiber_optic',
-                speed: '1000mbps',
-                equipment: ['ONT-1000', 'Router-Pro', 'Cable-50m'],
-                scheduledDate: '2025-08-20T09:00:00.000Z',
-                completedDate: '2025-08-19T16:30:00.000Z',
-                notes: 'Instalación completada sin inconvenientes'
-            },
-            createdBy: 'admin_001',
-            createdAt: '2025-08-18T10:00:00.000Z',
-            updatedAt: '2025-08-19T16:30:00.000Z',
-            metadata: {
-                submissionCount: 1,
-                lastSubmission: '2025-08-19T16:30:00.000Z',
-                estimatedDuration: 240,
-                actualDuration: 210
-            },
-            history: [
-                {
-                    action: 'created',
-                    timestamp: '2025-08-18T10:00:00.000Z',
-                    user: 'admin_001',
-                    details: 'Formulario creado'
-                },
-                {
-                    action: 'assigned',
-                    timestamp: '2025-08-18T11:00:00.000Z',
-                    user: 'admin_001',
-                    details: 'Asignado a tech_001'
-                },
-                {
-                    action: 'completed',
-                    timestamp: '2025-08-19T16:30:00.000Z',
-                    user: 'tech_001',
-                    details: 'Instalación completada exitosamente'
-                }
-            ],
-            files: [
-                {
-                    id: 'file_001',
-                    name: 'Formulario_FSO_001.pdf',
-                    type: 'application/pdf',
-                    size: 2048576,
-                    uploadedAt: '2025-08-19T16:30:00.000Z'
-                }
+        // Obtener formulario desde MongoDB
+        const form = await FSOForm.findOne({
+            $or: [
+                { formId: id },
+                { _id: id }
             ]
-        };
+        }).lean();
+
+        if (!form) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    message: 'Formulario no encontrado',
+                    type: 'NOT_FOUND'
+                }
+            });
+        }
 
         logger.info('Formulario obtenido exitosamente:', {
             formId: id,
@@ -391,7 +381,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             success: true,
             message: 'Formulario obtenido exitosamente',
             data: {
-                form: mockForm
+                form: form
             }
         });
 

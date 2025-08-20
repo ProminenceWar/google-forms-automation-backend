@@ -14,11 +14,11 @@ const { asyncHandler } = require('../middleware/errorHandler');
 router.post('/submit', asyncHandler(formController.submitForm));
 
 /**
- * @route GET /api/forms/mock-data
- * @desc Obtiene datos de prueba para formularios
+ * @route GET /api/forms/sample-data
+ * @desc Obtiene datos de muestra desde MongoDB
  * @access Public
  */
-router.get('/mock-data', asyncHandler(formController.getMockData));
+router.get('/sample-data', asyncHandler(formController.getSampleData));
 
 /**
  * @route GET /api/forms/validate-url

@@ -462,6 +462,22 @@ fsoFormSchema.statics.obtenerEstadisticas = async function (filtros = {}) {
     };
 };
 
+// Método de instancia para convertir a datos de formulario
+fsoFormSchema.methods.toFormData = function () {
+    return {
+        name: this.datosCliente.nombre,
+        email: this.email,
+        phone: this.datosCliente.telefono,
+        orderNumber: this.numeroOrden,
+        serviceType: this.tipoFSO,
+        technician: this.nombreTecnico,
+        company: this.companiaInspeccion,
+        address: this.datosCliente.direccion,
+        comments: this.observaciones.tecnico || this.observaciones.cliente,
+        status: this.estado
+    };
+};
+
 const FSOForm = mongoose.model('FSOForm', fsoFormSchema);
 
 module.exports = FSOForm;

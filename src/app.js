@@ -5,11 +5,13 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 // Importar configuración y utilidades
 const config = require('./config');
 const logger = require('./utils/logger');
+const { swaggerSpec, swaggerOptions } = require('./config/swagger');
 
 // Importar middleware
 const {
@@ -121,7 +123,49 @@ app.use((req, res, next) => {
 // Middleware para manejo de errores de JSON
 app.use(jsonErrorHandler);
 
-// Ruta raíz
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Información general de la API
+ *     description: Endpoint raíz que proporciona información básica sobre la API y enlaces a documentación
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: Información de la API obtenida exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Google Forms Automation Backend"
+ *                 version:
+ *                   type: string
+ *                   example: "1.0.0"
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 environment:
+ *                   type: string
+ *                   example: "development"
+ *                 documentation:
+ *                   type: object
+ *                   properties:
+ *                     health:
+ *                       type: string
+ *                       example: "/api/v1/health"
+ *                     api:
+ *                       type: string
+ *                       example: "/api/v1"
+ *                     endpoints:
+ *                       type: string
+ *                       example: "/api/docs"
+ */
 app.get('/', (req, res) => {
     res.status(200).json({
         success: true,
@@ -132,12 +176,32 @@ app.get('/', (req, res) => {
         documentation: {
             health: '/api/v1/health',
             api: '/api/v1',
-            endpoints: '/api/v1/docs'
+            swagger: '/api/docs'
         }
     });
 });
 
-// Health check endpoint (v1)
+/**
+ * @swagger
+ * /api/v1/health:
+ *   get:
+ *     summary: Verificación de salud del sistema
+ *     description: Endpoint para verificar el estado de salud de la API y sus servicios
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: Sistema saludable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthCheck'
+ *       503:
+ *         description: Problemas de salud detectados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.get('/api/v1/health', async (req, res) => {
     try {
         // Aquí puedes agregar verificaciones de salud más detalladas
@@ -194,25 +258,57 @@ app.get('/api', (req, res) => {
         success: true,
         message: 'Google Forms Automation API',
         version: '1.0.0',
-        endpoints: {
-            session: {
-                'POST /api/session/login': 'Inicia el proceso de login manual en Google',
-                'GET /api/session/status': 'Verifica el estado de la sesión',
-                'POST /api/session/logout': 'Cierra la sesión actual',
-                'POST /api/session/refresh': 'Actualiza la actividad de la sesión'
+        documentation: {
+            swagger: {
+                ui: '/api/docs',
+                json: '/api/docs.json',
+                description: 'Documentación interactiva completa con Swagger UI'
             },
-            forms: {
-                'POST /api/forms/submit': 'Envía datos al formulario de Google',
-                'GET /api/forms/mock-data': 'Obtiene datos de prueba',
-                'GET /api/forms/validate-url': 'Valida URL de formulario',
-                'POST /api/forms/test-submit': 'Prueba de envío con datos mock'
-            },
-            utilities: {
-                'GET /health': 'Health check del servidor',
-                'GET /api': 'Documentación de la API'
+            endpoints: {
+                health: '/api/v1/health',
+                authentication: '/api/v1/auth',
+                forms: '/api/v1/forms',
+                files: '/api/v1/files',
+                sessions: '/api/v1/sessions'
             }
         },
-        documentation: 'Para más detalles, consulta el README.md del proyecto'
+        endpoints: {
+            'v1': {
+                auth: {
+                    'POST /api/v1/auth/login': 'Iniciar sesión con JWT',
+                    'GET /api/v1/auth/profile': 'Obtener perfil de usuario',
+                    'POST /api/v1/auth/register': 'Registrar nuevo usuario',
+                    'POST /api/v1/auth/refresh': 'Renovar token JWT',
+                    'POST /api/v1/auth/logout': 'Cerrar sesión'
+                },
+                forms: {
+                    'GET /api/v1/forms': 'Listar formularios FSO',
+                    'POST /api/v1/forms': 'Crear formulario FSO',
+                    'GET /api/v1/forms/:id': 'Obtener formulario específico',
+                    'PUT /api/v1/forms/:id': 'Actualizar formulario',
+                    'DELETE /api/v1/forms/:id': 'Eliminar formulario'
+                },
+                files: {
+                    'GET /api/v1/files': 'Listar archivos',
+                    'POST /api/v1/files/upload': 'Subir archivo',
+                    'GET /api/v1/files/:id': 'Obtener archivo específico',
+                    'DELETE /api/v1/files/:id': 'Eliminar archivo'
+                },
+                sessions: {
+                    'GET /api/v1/sessions/active': 'Obtener sesiones activas'
+                },
+                system: {
+                    'GET /api/v1/health': 'Verificación de salud',
+                    'GET /': 'Información general de la API'
+                }
+            },
+            legacy: {
+                'POST /api/session/login': 'Login manual (legacy)',
+                'GET /api/session/status': 'Estado de sesión (legacy)',
+                'POST /api/forms/submit': 'Envío de formularios (legacy)'
+            }
+        },
+        message: '📋 Para documentación completa visita: /api/docs'
     });
 });
 
@@ -222,8 +318,14 @@ app.use('/api/v1/sessions', sessionRoutes);
 app.use('/api/v1/forms', formsV1Routes);
 app.use('/api/v1/files', filesV1Routes);
 
-// Rutas legacy (mantener compatibilidad)
-app.use('/api/forms', formRoutes);
+// Documentación Swagger
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerOptions));
+
+// Endpoint para obtener especificación OpenAPI en JSON
+app.get('/api/docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+});
 
 // Rutas legacy (mantener compatibilidad)
 app.use('/api/session', sessionRoutes);
