@@ -152,7 +152,7 @@ https://api.google-forms-automation.com/v1
 {
   "email": "string (required)",
   "numeroOrden": "string (required)",
-  "tipoFSO": "string (required)",
+  "tipoFSO": "string (required)", // Valores permitidos: 'instalaciones', 'tickets_averia', 'retiro', 'traslados', 'reubicaciones', 'cambio_equipo', 'inspeccion'
   "companiaInspeccion": "string (required)",
   "nombreTecnico": "string (required)",
   "instalacionDireccionCorrecta": boolean,
@@ -252,7 +252,7 @@ https://api.google-forms-automation.com/v1
       {
         "id": "fso_1724064600_abc123",
         "numeroOrden": "ORD-2025-001",
-        "tipoFSO": "Instalación Fibra",
+        "tipoFSO": "instalaciones",
         "nombreCliente": "Juan Pérez",
         "nombreTecnico": "Carlos López",
         "companiaInspeccion": "TechInstall Corp",
@@ -305,7 +305,7 @@ https://api.google-forms-automation.com/v1
     "id": "fso_1724064600_abc123",
     "email": "tecnico@example.com",
     "numeroOrden": "ORD-2025-001",
-    "tipoFSO": "Instalación Fibra",
+    "tipoFSO": "instalaciones",
     "companiaInspeccion": "TechInstall Corp",
     "nombreTecnico": "Carlos López",
     "instalacionDireccionCorrecta": true,
@@ -984,7 +984,7 @@ interface Usuario {
   id: string;
   email: string;
   nombre: string;
-  role: 'tecnico' | 'supervisor' | 'admin';
+  role: "tecnico" | "supervisor" | "admin";
   compania: string;
   activo: boolean;
   fechaCreacion: string;

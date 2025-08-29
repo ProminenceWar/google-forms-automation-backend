@@ -11,6 +11,7 @@ const { authenticateToken, requireRole } = require('../middleware/authMiddleware
 const {
     handleValidationErrors,
     calculateFormScore,
+    calculateScoreFromItems,
     checkFormPermissions
 } = require('../middleware/validationMiddleware');
 const {
@@ -22,6 +23,260 @@ const {
 } = require('../validators/fsoFormValidators');
 
 const router = express.Router();
+
+// ==============================================
+// RUTAS ESPECÍFICAS (deben ir ANTES que /:id)
+// ==============================================
+
+/**
+ * @swagger
+ * /api/v1/forms/stats:
+ *   get:
+ *     summary: Obtener estadísticas avanzadas de formularios FSO
+ *     description: Retorna estadísticas detalladas y métricas de los formularios FSO
+ *     tags: [Formularios]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: period
+ *         schema:
+ *           type: string
+ *           enum: [week, month, quarter, year, all]
+ *           default: month
+ *         description: Período de tiempo para las estadísticas
+ *       - in: query
+ *         name: tipoFSO
+ *         schema:
+ *           type: string
+ *         description: Filtrar por tipo de FSO específico
+ *       - in: query
+ *         name: companiaInspeccion
+ *         schema:
+ *           type: string
+ *         description: Filtrar por compañía de inspección
+ *     responses:
+ *       200:
+ *         description: Estadísticas obtenidas exitosamente
+ *       401:
+ *         description: Token de acceso requerido
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.get('/stats',
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const {
+                period = 'month',
+                tipoFSO,
+                companiaInspeccion
+            } = req.query;
+
+            // Calcular rango de fechas según el período
+            const now = new Date();
+            let startDate;
+
+            switch (period) {
+                case 'week':
+                    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'quarter':
+                    startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'year':
+                    startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'all':
+                    startDate = new Date('2020-01-01');
+                    break;
+                default: // month
+                    startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            }
+
+            // Construir filtros
+            const matchFilter = {
+                createdAt: { $gte: startDate, $lte: now }
+            };
+
+            if (tipoFSO) {
+                matchFilter.tipoFSO = tipoFSO;
+            }
+
+            if (companiaInspeccion) {
+                matchFilter.companiaInspeccion = new RegExp(companiaInspeccion, 'i');
+            }
+
+            // Ejecutar agregaciones en paralelo
+            const [
+                generalStats,
+                statusDistribution,
+                typeDistribution,
+                companyDistribution
+            ] = await Promise.all([
+                // Estadísticas generales
+                FSOForm.aggregate([
+                    { $match: matchFilter },
+                    {
+                        $group: {
+                            _id: null,
+                            total: { $sum: 1 },
+                            avgScore: { $avg: '$puntuacionCalculada' },
+                            completados: {
+                                $sum: { $cond: [{ $eq: ['$estado', 'completado'] }, 1, 0] }
+                            }
+                        }
+                    }
+                ]),
+
+                // Distribución por estado
+                FSOForm.aggregate([
+                    { $match: matchFilter },
+                    { $group: { _id: '$estado', count: { $sum: 1 } } }
+                ]),
+
+                // Distribución por tipo
+                FSOForm.aggregate([
+                    { $match: matchFilter },
+                    { $group: { _id: '$tipoFSO', count: { $sum: 1 } } }
+                ]),
+
+                // Distribución por compañía (top 10)
+                FSOForm.aggregate([
+                    { $match: matchFilter },
+                    { $group: { _id: '$companiaInspeccion', count: { $sum: 1 } } },
+                    { $sort: { count: -1 } },
+                    { $limit: 10 }
+                ])
+            ]);
+
+            // Procesar estadísticas generales
+            const stats = generalStats[0] || { total: 0, avgScore: 0, completados: 0 };
+            const completionRate = stats.total > 0 ? (stats.completados / stats.total) * 100 : 0;
+
+            // Log de actividad
+            logger.info('Estadísticas FSO obtenidas exitosamente:', {
+                userId: req.user.id,
+                period,
+                totalForms: stats.total
+            });
+
+            // Respuesta exitosa
+            res.status(200).json({
+                success: true,
+                message: 'Estadísticas obtenidas exitosamente',
+                data: {
+                    summary: {
+                        total: stats.total,
+                        avgScore: Math.round((stats.avgScore || 0) * 100) / 100,
+                        completados: stats.completados,
+                        completionRate: Math.round(completionRate * 100) / 100
+                    },
+                    distributions: {
+                        byStatus: statusDistribution,
+                        byType: typeDistribution,
+                        byCompany: companyDistribution
+                    },
+                    period: {
+                        type: period,
+                        startDate: startDate.toISOString(),
+                        endDate: now.toISOString()
+                    }
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error al obtener estadísticas:', error);
+            res.status(500).json({
+                success: false,
+                error: { message: 'Error interno del servidor', type: 'INTERNAL_ERROR' }
+            });
+        }
+    });
+
+/**
+ * @swagger
+ * /api/v1/forms/export:
+ *   get:
+ *     summary: Exportar formularios FSO
+ *     description: Obtiene formularios FSO para exportación con filtros
+ *     tags: [Formularios]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           maximum: 1000
+ *           default: 500
+ *         description: Límite de registros
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [full, summary]
+ *           default: summary
+ *         description: Formato de datos
+ *     responses:
+ *       200:
+ *         description: Formularios exportados exitosamente
+ *       401:
+ *         description: Token de acceso requerido
+ */
+router.get('/export',
+    authenticateToken,
+    requireRole(['admin', 'supervisor']),
+    async (req, res) => {
+        try {
+            const { limit = 500, format = 'summary' } = req.query;
+            const exportLimit = Math.min(parseInt(limit), 1000);
+
+            let projection = {};
+            if (format === 'summary') {
+                projection = {
+                    _id: 1, formId: 1, email: 1, numeroOrden: 1, tipoFSO: 1,
+                    companiaInspeccion: 1, nombreTecnico: 1, estado: 1,
+                    puntuacionCalculada: 1, createdAt: 1
+                };
+            }
+
+            const formsList = await FSOForm.find({}, projection)
+                .sort({ createdAt: -1 })
+                .limit(exportLimit)
+                .lean();
+
+            logger.info('Exportación realizada:', {
+                userId: req.user.id,
+                recordsExported: formsList.length,
+                format
+            });
+
+            res.status(200).json({
+                success: true,
+                message: 'Formularios exportados exitosamente',
+                data: {
+                    forms: formsList,
+                    export: {
+                        totalRecords: formsList.length,
+                        format,
+                        exportedAt: new Date().toISOString()
+                    }
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error al exportar:', error);
+            res.status(500).json({
+                success: false,
+                error: { message: 'Error interno del servidor', type: 'EXPORT_ERROR' }
+            });
+        }
+    });
+
+// ==============================================
+// RUTAS PRINCIPALES
+// ==============================================
 
 /**
  * @swagger
@@ -150,50 +405,140 @@ router.get('/',
                 limit = 10,
                 status,
                 search,
-                sortBy = 'fechaCreacion',
-                sortOrder = 'desc'
+                sortBy = 'createdAt',
+                sortOrder = 'desc',
+                tipoFSO,
+                companiaInspeccion,
+                nombreTecnico,
+                fechaInicio,
+                fechaFin,
+                includeArchivos = 'false',
+                includeHistorial = 'false'
             } = req.query;
 
-            // Construir filtros de búsqueda
+            // Construir filtros de búsqueda avanzados
             const searchFilter = {};
 
+            // Filtro por estado
             if (status) {
                 searchFilter.estado = status;
             }
 
+            // Filtro por tipo de FSO
+            if (tipoFSO) {
+                searchFilter.tipoFSO = tipoFSO;
+            }
+
+            // Filtro por compañía de inspección
+            if (companiaInspeccion) {
+                searchFilter.companiaInspeccion = { $regex: companiaInspeccion, $options: 'i' };
+            }
+
+            // Filtro por técnico
+            if (nombreTecnico) {
+                searchFilter.nombreTecnico = { $regex: nombreTecnico, $options: 'i' };
+            }
+
+            // Filtro por rango de fechas
+            if (fechaInicio || fechaFin) {
+                searchFilter.createdAt = {};
+                if (fechaInicio) {
+                    searchFilter.createdAt.$gte = new Date(fechaInicio);
+                }
+                if (fechaFin) {
+                    const endDate = new Date(fechaFin);
+                    endDate.setHours(23, 59, 59, 999); // Incluir todo el día
+                    searchFilter.createdAt.$lte = endDate;
+                }
+            }
+
+            // Filtro de búsqueda general
             if (search) {
                 searchFilter.$or = [
                     { numeroOrden: { $regex: search, $options: 'i' } },
-                    { 'datosCliente.nombre': { $regex: search, $options: 'i' } },
-                    { nombreTecnico: { $regex: search, $options: 'i' } }
+                    { 'datosCliente.nombreCliente': { $regex: search, $options: 'i' } },
+                    { 'cliente.nombreCliente': { $regex: search, $options: 'i' } },
+                    { nombreTecnico: { $regex: search, $options: 'i' } },
+                    { companiaInspeccion: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
                 ];
             }
 
-            // Configurar paginación
-            const currentPage = parseInt(page);
-            const itemsPerPage = parseInt(limit);
+            // Configurar paginación con validación
+            const currentPage = Math.max(1, parseInt(page));
+            const itemsPerPage = Math.min(100, Math.max(1, parseInt(limit))); // Límite máximo de 100
             const skipItems = (currentPage - 1) * itemsPerPage;
 
-            // Configurar ordenamiento
+            // Configurar ordenamiento con validación
+            const allowedSortFields = ['createdAt', 'updatedAt', 'numeroOrden', 'estado', 'tipoFSO', 'companiaInspeccion', 'nombreTecnico', 'puntuacionCalculada'];
+            const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
             const sortOptions = {};
-            sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+            sortOptions[validSortBy] = sortOrder === 'desc' ? -1 : 1;
+
+            // Preparar projection para optimizar consulta
+            let projection = {
+                _id: 1,
+                formId: 1,
+                email: 1,
+                numeroOrden: 1,
+                tipoFSO: 1,
+                companiaInspeccion: 1,
+                nombreTecnico: 1,
+                estado: 1,
+                puntuacionCalculada: 1,
+                'datosCliente.nombreCliente': 1,
+                'datosCliente.telefonoCliente': 1,
+                'datosCliente.puntuacionCliente': 1,
+                'cliente.nombreCliente': 1,
+                'cliente.telefonoCliente': 1,
+                'cliente.puntuacionCliente': 1,
+                'ubicacion.direccion': 1,
+                'ubicacion.latitude': 1,
+                'ubicacion.longitude': 1,
+                comentariosCaso: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                'procesamiento.reportePdfGenerado': 1,
+                'procesamiento.notificacionEnviada': 1
+            };
+
+            // Incluir archivos si se solicita
+            if (includeArchivos === 'true') {
+                projection.archivosAdjuntos = 1;
+            }
+
+            // Incluir historial si se solicita
+            if (includeHistorial === 'true') {
+                projection.historial = 1;
+            }
 
             // Ejecutar consultas en paralelo para optimizar rendimiento
-            const [formsList, totalCount, statusStats] = await Promise.all([
-                FSOForm.find(searchFilter)
+            const [formsList, totalCount, statusStats, typeStats, companyStats] = await Promise.all([
+                FSOForm.find(searchFilter, projection)
                     .sort(sortOptions)
                     .skip(skipItems)
                     .limit(itemsPerPage)
                     .lean(),
                 FSOForm.countDocuments(searchFilter),
                 FSOForm.aggregate([
+                    { $match: searchFilter },
                     { $group: { _id: '$estado', count: { $sum: 1 } } }
+                ]),
+                FSOForm.aggregate([
+                    { $match: searchFilter },
+                    { $group: { _id: '$tipoFSO', count: { $sum: 1 } } }
+                ]),
+                FSOForm.aggregate([
+                    { $match: searchFilter },
+                    { $group: { _id: '$companiaInspeccion', count: { $sum: 1 } } },
+                    { $sort: { count: -1 } },
+                    { $limit: 10 }
                 ])
             ]);
 
-            // Preparar estadísticas de resumen
+            // Preparar estadísticas de resumen optimizadas
             const summaryStats = {
-                total: await FSOForm.countDocuments(),
+                total: totalCount,
                 pendiente: 0,
                 en_progreso: 0,
                 completado: 0,
@@ -210,19 +555,47 @@ router.get('/',
             // Calcular información de paginación
             const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-            // Log de actividad
+            // Preparar metadata adicional
+            const metadata = {
+                filters: {
+                    status,
+                    tipoFSO,
+                    companiaInspeccion,
+                    nombreTecnico,
+                    fechaInicio,
+                    fechaFin,
+                    search
+                },
+                statistics: {
+                    byStatus: statusStats,
+                    byType: typeStats,
+                    byCompany: companyStats
+                },
+                performance: {
+                    queryTime: Date.now(),
+                    totalDocuments: totalCount,
+                    documentsReturned: formsList.length
+                }
+            };
+
+            // Log de actividad mejorado
             logger.info('Formularios listados exitosamente:', {
                 userId: req.user.id,
                 userRole: req.user.role,
                 totalFound: formsList.length,
-                filters: { status, search },
-                pagination: { page: currentPage, limit: itemsPerPage }
+                totalInDB: totalCount,
+                filters: { status, search, tipoFSO, companiaInspeccion },
+                pagination: { page: currentPage, limit: itemsPerPage },
+                performance: {
+                    documentsScanned: totalCount,
+                    documentsReturned: formsList.length
+                }
             });
 
-            // Respuesta exitosa
+            // Respuesta exitosa con estructura mejorada
             res.status(200).json({
                 success: true,
-                message: 'Formularios obtenidos exitosamente',
+                message: 'Formularios FSO obtenidos exitosamente',
                 data: {
                     forms: formsList,
                     pagination: {
@@ -231,26 +604,33 @@ router.get('/',
                         totalItems: totalCount,
                         itemsPerPage,
                         hasNextPage: currentPage < totalPages,
-                        hasPrevPage: currentPage > 1
+                        hasPrevPage: currentPage > 1,
+                        nextPage: currentPage < totalPages ? currentPage + 1 : null,
+                        prevPage: currentPage > 1 ? currentPage - 1 : null
                     },
-                    summary: summaryStats
-                }
+                    summary: summaryStats,
+                    metadata
+                },
+                timestamp: new Date().toISOString()
             });
 
         } catch (error) {
-            logger.error('Error al obtener formularios:', {
+            logger.error('Error al obtener formularios FSO:', {
                 error: error.message,
                 stack: error.stack,
                 userId: req.user?.id,
-                query: req.query
+                query: req.query,
+                timestamp: new Date().toISOString()
             });
 
             res.status(500).json({
                 success: false,
                 error: {
-                    message: 'Error interno del servidor',
-                    type: 'INTERNAL_ERROR'
-                }
+                    message: 'Error interno del servidor al obtener formularios',
+                    type: 'INTERNAL_ERROR',
+                    details: process.env.NODE_ENV === 'development' ? error.message : undefined
+                },
+                timestamp: new Date().toISOString()
             });
         }
     });
@@ -320,7 +700,7 @@ router.post('/',
 
             // Calcular puntaje automático si hay items de inspección
             const calculatedScore = formData.itemsInspeccion
-                ? calculateFormScore(formData.itemsInspeccion)
+                ? calculateScoreFromItems(formData.itemsInspeccion)
                 : 0;
 
             // Preparar datos del nuevo formulario
@@ -531,7 +911,7 @@ router.put('/:id',
 
             // Recalcular puntaje si se actualizaron items de inspección
             if (updateData.itemsInspeccion) {
-                updateData.puntajeTotal = calculateFormScore(updateData.itemsInspeccion);
+                updateData.puntajeTotal = calculateScoreFromItems(updateData.itemsInspeccion);
             }
 
             // Actualizar metadatos

@@ -13,9 +13,21 @@ const logger = require('../src/utils/logger');
 // Datos de usuarios de muestra
 const sampleUsers = [
     {
-        email: 'admin@tecnetwork.com',
+        email: 'admin@fso-automation.com',
         password: 'admin123',
         name: 'Administrador del Sistema',
+        role: USER_ROLES.ADMIN,
+        company: 'FSO Automation',
+        profile: {
+            phone: '+52 55 1234 5678',
+            timezone: 'America/Mexico_City',
+            language: 'es'
+        }
+    },
+    {
+        email: 'admin@tecnetwork.com',
+        password: 'admin123',
+        name: 'Administrador TecNetwork',
         role: USER_ROLES.ADMIN,
         company: 'TecNetwork Solutions',
         profile: {
@@ -67,7 +79,7 @@ const sampleFSOForms = [
     {
         email: 'contacto@empresaabc.com',
         numeroOrden: 'ORD-2025-001-tetikl',
-        tipoFSO: FSO_TYPES.FIBER_INSTALLATION,
+        tipoFSO: FSO_TYPES.INSTALACIONES,
         companiaInspeccion: 'TecNetwork Solutions',
         nombreTecnico: 'Juan Pérez Martínez',
         inspeccionTecnica: {
@@ -124,7 +136,7 @@ const sampleFSOForms = [
     {
         email: 'admin@torresnorte.com',
         numeroOrden: 'ORD-2025-002',
-        tipoFSO: FSO_TYPES.INSPECTION,
+        tipoFSO: FSO_TYPES.INSPECCION,
         companiaInspeccion: 'TecNetwork Solutions',
         nombreTecnico: 'Ana García López',
         inspeccionTecnica: {
@@ -181,7 +193,7 @@ const sampleFSOForms = [
     {
         email: 'soporte@residencialverde.com',
         numeroOrden: 'ORD-2025-003',
-        tipoFSO: FSO_TYPES.FIBER_REPAIR,
+        tipoFSO: FSO_TYPES.TICKETS_AVERIA,
         companiaInspeccion: 'TecNetwork Solutions',
         nombreTecnico: 'Juan Pérez Martínez',
         inspeccionTecnica: {

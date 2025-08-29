@@ -12,6 +12,7 @@ require('dotenv').config();
 const config = require('./config');
 const logger = require('./utils/logger');
 const { swaggerSpec, swaggerOptions } = require('./config/swagger');
+const Database = require('./database/connection');
 
 // Importar middleware
 const {
@@ -26,6 +27,8 @@ const sessionRoutes = require('./routes/session');
 const formRoutes = require('./routes/forms');
 const formsV1Routes = require('./routes/formsV1');
 const filesV1Routes = require('./routes/files');
+const adminRoutes = require('./routes/admin');
+const fsoStatsRoutes = require('./routes/fsoStats');
 
 // Crear aplicación Express
 const app = express();
@@ -297,6 +300,13 @@ app.get('/api', (req, res) => {
                 sessions: {
                     'GET /api/v1/sessions/active': 'Obtener sesiones activas'
                 },
+                admin: {
+                    'GET /api/admin/dashboard/stats': 'Estadísticas del dashboard',
+                    'GET /api/admin/export/forms/csv': 'Exportar formularios CSV',
+                    'GET /api/admin/export/forms/excel': 'Exportar formularios Excel',
+                    'GET /api/admin/config/system': 'Configuración del sistema',
+                    'GET /api/admin/reports/forms/pdf': 'Reporte de formularios PDF'
+                },
                 system: {
                     'GET /api/v1/health': 'Verificación de salud',
                     'GET /': 'Información general de la API'
@@ -317,6 +327,10 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/sessions', sessionRoutes);
 app.use('/api/v1/forms', formsV1Routes);
 app.use('/api/v1/files', filesV1Routes);
+app.use('/api/v1/fso', fsoStatsRoutes); // Rutas específicas para estadísticas FSO
+
+// Rutas administrativas
+app.use('/api/admin', adminRoutes);
 
 // Documentación Swagger
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerOptions));
@@ -342,6 +356,11 @@ async function initializeApp() {
     try {
         // Inicializar servicios si es necesario
         logger.info('Initializing application...');
+
+        // Conectar a la base de datos
+        const database = new Database();
+        await database.connect();
+        logger.info('Database connected successfully');
 
         // Aquí se pueden agregar inicializaciones adicionales si es necesario
         // Por ejemplo, inicializar servicios, conectar a bases de datos, etc.

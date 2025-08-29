@@ -14,11 +14,13 @@ module.exports = {
 
     // Tipos de FSO
     FSO_TYPES: {
-        FIBER_INSTALLATION: 'Instalación Fibra',
-        FIBER_REPAIR: 'Reparación Fibra',
-        COPPER_INSTALLATION: 'Instalación Cobre',
-        COPPER_REPAIR: 'Reparación Cobre',
-        INSPECTION: 'Inspección'
+        INSTALACIONES: 'instalaciones',
+        TICKETS_AVERIA: 'tickets_averia',
+        RETIRO: 'retiro',
+        TRASLADOS: 'traslados',
+        REUBICACIONES: 'reubicaciones',
+        CAMBIO_EQUIPO: 'cambio_equipo',
+        INSPECCION: 'inspeccion'
     },
 
     // Roles de usuario

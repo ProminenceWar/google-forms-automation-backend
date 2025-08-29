@@ -55,8 +55,8 @@ const fsoFormSchema = new mongoose.Schema({
         maxlength: [100, 'El nombre del técnico no puede exceder 100 caracteres']
     },
 
-    // Campos de inspección técnica (boolean)
-    inspeccionTecnica: {
+    // Campos de inspección técnica (boolean) - estructura del frontend
+    itemsInspeccion: {
         instalacionDireccionCorrecta: {
             type: Boolean,
             required: true
@@ -97,40 +97,32 @@ const fsoFormSchema = new mongoose.Schema({
             type: Boolean,
             required: true
         },
+        potenciaCorrecta: {
+            type: Boolean,
+            required: true
+        },
         routerUbicadoCorrectamente: {
             type: Boolean,
             required: true
         }
     },
 
-    // Mediciones técnicas
+    // Mediciones técnicas - estructura del frontend
     medicionesTecnicas: {
         metrosDrop: {
             type: String,
             required: [true, 'Los metros de drop son requeridos'],
-            trim: true,
-            validate: {
-                validator: function (v) {
-                    return /^\d+(\.\d+)?$/.test(v) && parseFloat(v) >= 0;
-                },
-                message: 'Los metros de drop deben ser un número positivo'
-            }
+            trim: true
         },
-        potenciaCorrecta: {
+        potencia: {
             type: String,
             required: [true, 'La potencia es requerida'],
-            trim: true,
-            validate: {
-                validator: function (v) {
-                    return /^-?\d+(\.\d+)?\s*(dBm|dbm|DBM)$/i.test(v);
-                },
-                message: 'La potencia debe incluir la unidad dBm'
-            }
+            trim: true
         }
     },
 
-    // Información del cliente
-    cliente: {
+    // Información del cliente - estructura del frontend
+    datosCliente: {
         nombreCliente: {
             type: String,
             required: [true, 'El nombre del cliente es requerido'],
@@ -140,52 +132,28 @@ const fsoFormSchema = new mongoose.Schema({
         telefonoCliente: {
             type: String,
             required: [true, 'El teléfono del cliente es requerido'],
-            trim: true,
-            validate: {
-                validator: function (v) {
-                    return /^\+?[\d\s\-\(\)]+$/.test(v);
-                },
-                message: 'Número de teléfono inválido'
-            }
+            trim: true
         },
         puntuacionCliente: {
-            type: String,
+            type: Number,
             required: [true, 'La puntuación del cliente es requerida'],
-            enum: {
-                values: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
-                message: 'La puntuación debe ser un número del 1 al 10'
-            }
+            min: [1, 'La puntuación debe ser mínimo 1'],
+            max: [10, 'La puntuación debe ser máximo 10']
         }
     },
 
     // Comentarios y observaciones
     comentariosCaso: {
         type: String,
+        required: [true, 'Los comentarios del caso son requeridos'],
         trim: true,
         maxlength: [1000, 'Los comentarios no pueden exceder 1000 caracteres']
     },
 
-    // Ubicación geográfica
+    // Ubicación geográfica - opcional
     ubicacion: {
-        latitude: {
-            type: Number,
-            min: [-90, 'La latitud debe estar entre -90 y 90'],
-            max: [90, 'La latitud debe estar entre -90 y 90']
-        },
-        longitude: {
-            type: Number,
-            min: [-180, 'La longitud debe estar entre -180 y 180'],
-            max: [180, 'La longitud debe estar entre -180 y 180']
-        },
-        direccion: {
-            type: String,
-            trim: true,
-            maxlength: [500, 'La dirección no puede exceder 500 caracteres']
-        },
-        precision: {
-            type: Number,
-            min: 0
-        }
+        type: mongoose.Schema.Types.Mixed,
+        default: undefined
     },
 
     // Estado y metadatos del formulario
@@ -198,30 +166,23 @@ const fsoFormSchema = new mongoose.Schema({
         default: FSO_STATES.COMPLETED
     },
 
-    // Puntuaciones calculadas
-    puntuaciones: {
-        puntuacionCalculada: {
-            type: Number,
-            min: 0,
-            max: 10,
-            default: 0
-        },
-        criteriosAprobados: {
-            type: Number,
-            min: 0,
-            default: 0
-        },
-        totalCriterios: {
-            type: Number,
-            min: 0,
-            default: 11 // Total de campos de inspección técnica
-        },
-        porcentajeAprobacion: {
-            type: Number,
-            min: 0,
-            max: 100,
-            default: 0
-        }
+    // Fechas opcionales - compatibilidad con frontend
+    fechaCreacion: {
+        type: Date,
+        default: undefined
+    },
+
+    fechaActualizacion: {
+        type: Date,
+        default: undefined
+    },
+
+    // Puntuación calculada - opcional
+    puntuacionCalculada: {
+        type: Number,
+        min: 0,
+        max: 10,
+        default: 0
     },
 
     // Archivos adjuntos
@@ -327,8 +288,8 @@ fsoFormSchema.index({ companiaInspeccion: 1 });
 fsoFormSchema.index({ nombreTecnico: 1 });
 fsoFormSchema.index({ createdAt: -1 });
 fsoFormSchema.index({ updatedAt: -1 });
-fsoFormSchema.index({ 'cliente.nombreCliente': 1 });
-fsoFormSchema.index({ 'puntuaciones.puntuacionCalculada': -1 });
+fsoFormSchema.index({ 'datosCliente.nombreCliente': 1 });
+fsoFormSchema.index({ 'puntuacionCalculada': -1 });
 
 // Índice compuesto para búsquedas complejas
 fsoFormSchema.index({
@@ -339,7 +300,7 @@ fsoFormSchema.index({
 
 // Middleware pre-save para calcular puntuaciones
 fsoFormSchema.pre('save', function (next) {
-    if (this.isModified('inspeccionTecnica') || this.isNew) {
+    if (this.isModified('itemsInspeccion') || this.isNew) {
         this.calcularPuntuaciones();
     }
     next();
@@ -347,21 +308,19 @@ fsoFormSchema.pre('save', function (next) {
 
 // Método para calcular puntuaciones automáticamente
 fsoFormSchema.methods.calcularPuntuaciones = function () {
-    const criterios = this.inspeccionTecnica;
+    // Usar la nueva estructura itemsInspeccion
+    const criterios = this.itemsInspeccion;
+    if (!criterios) return;
+
     const totalCriterios = Object.keys(criterios).length;
     const criteriosAprobados = Object.values(criterios).filter(valor => valor === true).length;
 
-    this.puntuaciones.totalCriterios = totalCriterios;
-    this.puntuaciones.criteriosAprobados = criteriosAprobados;
-    this.puntuaciones.porcentajeAprobacion = totalCriterios > 0 ?
-        Math.round((criteriosAprobados / totalCriterios) * 100) : 0;
-
     // Calcular puntuación considerando también la puntuación del cliente
-    const puntuacionCliente = parseFloat(this.cliente.puntuacionCliente) || 0;
-    const puntuacionTecnica = (criteriosAprobados / totalCriterios) * 10;
+    const puntuacionCliente = this.datosCliente?.puntuacionCliente || 0;
+    const puntuacionTecnica = totalCriterios > 0 ? (criteriosAprobados / totalCriterios) * 10 : 0;
 
     // Promedio ponderado: 70% técnica, 30% cliente
-    this.puntuaciones.puntuacionCalculada = Number(
+    this.puntuacionCalculada = Number(
         ((puntuacionTecnica * 0.7) + (puntuacionCliente * 0.3)).toFixed(2)
     );
 };
@@ -421,7 +380,7 @@ fsoFormSchema.statics.buscarPorFiltros = function (filtros = {}) {
     if (filtros.search) {
         query.$or = [
             { numeroOrden: new RegExp(filtros.search, 'i') },
-            { 'cliente.nombreCliente': new RegExp(filtros.search, 'i') }
+            { 'datosCliente.nombreCliente': new RegExp(filtros.search, 'i') }
         ];
     }
 
@@ -445,8 +404,8 @@ fsoFormSchema.statics.obtenerEstadisticas = async function (filtros = {}) {
                 revisados: {
                     $sum: { $cond: [{ $eq: ['$estado', FSO_STATES.REVIEWED] }, 1, 0] }
                 },
-                puntuacionPromedio: { $avg: '$puntuaciones.puntuacionCalculada' },
-                porcentajeAprobacionPromedio: { $avg: '$puntuaciones.porcentajeAprobacion' }
+                puntuacionPromedio: { $avg: '$puntuacionCalculada' },
+                porcentajeAprobacionPromedio: { $avg: '$puntuacionCalculada' }
             }
         }
     ];
@@ -465,15 +424,15 @@ fsoFormSchema.statics.obtenerEstadisticas = async function (filtros = {}) {
 // Método de instancia para convertir a datos de formulario
 fsoFormSchema.methods.toFormData = function () {
     return {
-        name: this.datosCliente.nombre,
+        name: this.datosCliente?.nombreCliente,
         email: this.email,
-        phone: this.datosCliente.telefono,
+        phone: this.datosCliente?.telefonoCliente,
         orderNumber: this.numeroOrden,
         serviceType: this.tipoFSO,
         technician: this.nombreTecnico,
         company: this.companiaInspeccion,
-        address: this.datosCliente.direccion,
-        comments: this.observaciones.tecnico || this.observaciones.cliente,
+        address: this.ubicacion?.direccion,
+        comments: this.comentariosCaso,
         status: this.estado
     };
 };

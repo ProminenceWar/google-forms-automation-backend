@@ -14,11 +14,18 @@ function buildAtlasConnectionString() {
         MONGODB_ATLAS_USERNAME,
         MONGODB_ATLAS_PASSWORD,
         MONGODB_ATLAS_CLUSTER,
-        MONGODB_ATLAS_DATABASE = 'fso-automation',
+        MONGODB_ATLAS_DATABASE = 'google-forms-automation',
         MONGODB_ATLAS_RETRY_WRITES = 'true',
-        MONGODB_ATLAS_W = 'majority'
+        MONGODB_ATLAS_W = 'majority',
+        MONGODB_ATLAS_CONNECTION_STRING
     } = process.env;
 
+    // Si hay una cadena completa configurada, usarla
+    if (MONGODB_ATLAS_CONNECTION_STRING) {
+        return MONGODB_ATLAS_CONNECTION_STRING;
+    }
+
+    // Si no, construir la cadena
     if (!MONGODB_ATLAS_USERNAME || !MONGODB_ATLAS_PASSWORD || !MONGODB_ATLAS_CLUSTER) {
         throw new Error('Variables de entorno de MongoDB Atlas no configuradas');
     }
@@ -29,7 +36,7 @@ function buildAtlasConnectionString() {
         appName: 'FSO-Automation-Backend'
     });
 
-    return `mongodb+srv://${MONGODB_ATLAS_USERNAME}:${MONGODB_ATLAS_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/${MONGODB_ATLAS_DATABASE}?${params.toString()}`;
+    return `mongodb+srv://${encodeURIComponent(MONGODB_ATLAS_USERNAME)}:${encodeURIComponent(MONGODB_ATLAS_PASSWORD)}@${MONGODB_ATLAS_CLUSTER}/${MONGODB_ATLAS_DATABASE}?${params.toString()}`;
 }
 
 const config = {

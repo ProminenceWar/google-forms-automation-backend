@@ -71,8 +71,9 @@ const handleAuthError = (error, req, res, next) => {
  * Middleware para calcular puntuación automática de formularios FSO
  */
 const calculateFormScore = (req, res, next) => {
-    if (req.body.inspeccionTecnica) {
-        const inspeccion = req.body.inspeccionTecnica;
+    // Usar itemsInspeccion como lo envía el frontend
+    if (req.body.itemsInspeccion) {
+        const inspeccion = req.body.itemsInspeccion;
         const totalCampos = Object.keys(inspeccion).length;
         const camposPositivos = Object.values(inspeccion).filter(Boolean).length;
 
@@ -161,9 +162,24 @@ const checkFormPermissions = (action = 'read') => {
     };
 };
 
+/**
+ * Función utilitaria para calcular puntuación de formularios FSO
+ * @param {Object} itemsInspeccion - Objeto con items de inspección
+ * @returns {Number} - Puntuación calculada
+ */
+const calculateScoreFromItems = (itemsInspeccion) => {
+    if (!itemsInspeccion) return 0;
+
+    const totalCampos = Object.keys(itemsInspeccion).length;
+    const camposPositivos = Object.values(itemsInspeccion).filter(Boolean).length;
+
+    return totalCampos > 0 ? Math.round((camposPositivos / totalCampos) * 100) : 0;
+};
+
 module.exports = {
     handleValidationErrors,
     handleAuthError,
     calculateFormScore,
+    calculateScoreFromItems,
     checkFormPermissions
 };

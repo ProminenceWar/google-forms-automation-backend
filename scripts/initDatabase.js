@@ -195,7 +195,7 @@ class DatabaseInitializer {
             const sampleForm = new FSOForm({
                 email: tecnico.email,
                 numeroOrden: 'ORD-2025-' + String(Date.now()).slice(-6),
-                tipoFSO: 'Instalación Fibra',
+                tipoFSO: 'instalaciones',
                 companiaInspeccion: tecnico.company,
                 nombreTecnico: tecnico.name,
 

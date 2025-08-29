@@ -11,6 +11,7 @@ const { FSO_TYPES, FSO_STATES } = require('../constants');
  * Validaciones para crear un formulario FSO
  */
 const createFormValidation = [
+    // Campos requeridos principales
     body('email')
         .isEmail()
         .withMessage('Email inválido')
@@ -20,197 +21,159 @@ const createFormValidation = [
     body('numeroOrden')
         .notEmpty()
         .withMessage('El número de orden es requerido')
-        .isLength({ min: 3, max: 50 })
-        .withMessage('El número de orden debe tener entre 3 y 50 caracteres')
-        .matches(/^[A-Z0-9-_]+$/)
-        .withMessage('El número de orden solo puede contener letras mayúsculas, números, guiones y guiones bajos')
-        .trim()
-        .toUpperCase()
-        .custom(async (value) => {
-            const existingForm = await FSOForm.findOne({ numeroOrden: value });
-            if (existingForm) {
-                throw new Error('El número de orden ya existe');
-            }
-            return true;
-        }),
+        .isString()
+        .withMessage('El número de orden debe ser una cadena')
+        .trim(),
 
     body('tipoFSO')
         .notEmpty()
         .withMessage('El tipo de FSO es requerido')
-        .isIn(Object.values(FSO_TYPES))
-        .withMessage('Tipo de FSO inválido'),
+        .isString()
+        .withMessage('El tipo de FSO debe ser una cadena')
+        .trim(),
 
     body('companiaInspeccion')
         .notEmpty()
         .withMessage('La compañía de inspección es requerida')
-        .isLength({ min: 2, max: 100 })
-        .withMessage('La compañía debe tener entre 2 y 100 caracteres')
+        .isString()
+        .withMessage('La compañía de inspección debe ser una cadena')
         .trim(),
 
     body('nombreTecnico')
         .notEmpty()
         .withMessage('El nombre del técnico es requerido')
-        .isLength({ min: 2, max: 100 })
-        .withMessage('El nombre del técnico debe tener entre 2 y 100 caracteres')
+        .isString()
+        .withMessage('El nombre del técnico debe ser una cadena')
         .trim(),
 
-    // Validaciones para campos de inspección técnica
-    body('inspeccionTecnica.instalacionDireccionCorrecta')
+    body('comentariosCaso')
+        .notEmpty()
+        .withMessage('Los comentarios del caso son requeridos')
+        .isString()
+        .withMessage('Los comentarios del caso deben ser una cadena')
+        .trim(),
+
+    // Validaciones para datosCliente (requerido)
+    body('datosCliente')
+        .notEmpty()
+        .withMessage('Los datos del cliente son requeridos')
+        .isObject()
+        .withMessage('Los datos del cliente deben ser un objeto'),
+
+    body('datosCliente.nombreCliente')
+        .notEmpty()
+        .withMessage('El nombre del cliente es requerido')
+        .isString()
+        .withMessage('El nombre del cliente debe ser una cadena')
+        .trim(),
+
+    body('datosCliente.telefonoCliente')
+        .notEmpty()
+        .withMessage('El teléfono del cliente es requerido')
+        .isString()
+        .withMessage('El teléfono del cliente debe ser una cadena')
+        .trim(),
+
+    body('datosCliente.puntuacionCliente')
+        .notEmpty()
+        .withMessage('La puntuación del cliente es requerida')
+        .isNumeric()
+        .withMessage('La puntuación del cliente debe ser un número'),
+
+    // Validaciones para itemsInspeccion (requerido)
+    body('itemsInspeccion')
+        .notEmpty()
+        .withMessage('Los items de inspección son requeridos')
+        .isObject()
+        .withMessage('Los items de inspección deben ser un objeto'),
+
+    body('itemsInspeccion.instalacionDireccionCorrecta')
         .isBoolean()
         .withMessage('instalacionDireccionCorrecta debe ser boolean'),
 
-    body('inspeccionTecnica.combaFTB')
+    body('itemsInspeccion.combaFTB')
         .isBoolean()
         .withMessage('combaFTB debe ser boolean'),
 
-    body('inspeccionTecnica.colocacionGripCorrecta')
+    body('itemsInspeccion.colocacionGripCorrecta')
         .isBoolean()
         .withMessage('colocacionGripCorrecta debe ser boolean'),
 
-    body('inspeccionTecnica.alturaDropCorrecta')
+    body('itemsInspeccion.alturaDropCorrecta')
         .isBoolean()
         .withMessage('alturaDropCorrecta debe ser boolean'),
 
-    body('inspeccionTecnica.puntoApoyoAdecuado')
+    body('itemsInspeccion.puntoApoyoAdecuado')
         .isBoolean()
         .withMessage('puntoApoyoAdecuado debe ser boolean'),
 
-    body('inspeccionTecnica.dropLibreEmpalme')
+    body('itemsInspeccion.dropLibreEmpalme')
         .isBoolean()
         .withMessage('dropLibreEmpalme debe ser boolean'),
 
-    body('inspeccionTecnica.colocacionGanchosCorrecta')
+    body('itemsInspeccion.colocacionGanchosCorrecta')
         .isBoolean()
         .withMessage('colocacionGanchosCorrecta debe ser boolean'),
 
-    body('inspeccionTecnica.recorridoDropExteriorAdecuado')
+    body('itemsInspeccion.recorridoDropExteriorAdecuado')
         .isBoolean()
         .withMessage('recorridoDropExteriorAdecuado debe ser boolean'),
 
-    body('inspeccionTecnica.colocacionTestTerminalCorrecta')
+    body('itemsInspeccion.colocacionTestTerminalCorrecta')
         .isBoolean()
         .withMessage('colocacionTestTerminalCorrecta debe ser boolean'),
 
-    body('inspeccionTecnica.jackSuperficieCorrecto')
+    body('itemsInspeccion.jackSuperficieCorrecto')
         .isBoolean()
         .withMessage('jackSuperficieCorrecto debe ser boolean'),
 
-    body('inspeccionTecnica.routerUbicadoCorrectamente')
+    body('itemsInspeccion.potenciaCorrecta')
+        .isBoolean()
+        .withMessage('potenciaCorrecta debe ser boolean'),
+
+    body('itemsInspeccion.routerUbicadoCorrectamente')
         .isBoolean()
         .withMessage('routerUbicadoCorrectamente debe ser boolean'),
 
-    body('inspeccionTecnica.configuredRouterAP')
-        .isBoolean()
-        .withMessage('configuredRouterAP debe ser boolean'),
-
-    body('inspeccionTecnica.soporteRouterAdecuado')
-        .isBoolean()
-        .withMessage('soporteRouterAdecuado debe ser boolean'),
-
-    body('inspeccionTecnica.cableadoInteriorOrdenado')
-        .isBoolean()
-        .withMessage('cableadoInteriorOrdenado debe ser boolean'),
-
-    body('inspeccionTecnica.soporteCanalInterno')
-        .isBoolean()
-        .withMessage('soporteCanalInterno debe ser boolean'),
-
-    body('inspeccionTecnica.tapadoPerforaciones')
-        .isBoolean()
-        .withMessage('tapadoPerforaciones debe ser boolean'),
-
-    body('inspeccionTecnica.instalacionSinDanos')
-        .isBoolean()
-        .withMessage('instalacionSinDanos debe ser boolean'),
-
-    body('inspeccionTecnica.limpiezaPostInstalacion')
-        .isBoolean()
-        .withMessage('limpiezaPostInstalacion debe ser boolean'),
-
-    // Validaciones para mediciones técnicas
-    body('medicionesTecnicas.velocidadDescargaMbps')
-        .isFloat({ min: 0 })
-        .withMessage('velocidadDescargaMbps debe ser un número positivo'),
-
-    body('medicionesTecnicas.velocidadCargaMbps')
-        .isFloat({ min: 0 })
-        .withMessage('velocidadCargaMbps debe ser un número positivo'),
-
-    body('medicionesTecnicas.latenciaMs')
-        .isFloat({ min: 0 })
-        .withMessage('latenciaMs debe ser un número positivo'),
-
-    body('medicionesTecnicas.potenciaOpticaDbm')
-        .isFloat()
-        .withMessage('potenciaOpticaDbm debe ser un número'),
-
-    body('medicionesTecnicas.potenciaOpticaOLT')
-        .isFloat()
-        .withMessage('potenciaOpticaOLT debe ser un número'),
-
-    // Validaciones para información del cliente
-    body('cliente.codigoCliente')
+    // Validaciones para medicionesTecnicas (requerido)
+    body('medicionesTecnicas')
         .notEmpty()
-        .withMessage('El código del cliente es requerido')
-        .isLength({ min: 3, max: 20 })
-        .withMessage('El código del cliente debe tener entre 3 y 20 caracteres'),
+        .withMessage('Las mediciones técnicas son requeridas')
+        .isObject()
+        .withMessage('Las mediciones técnicas deben ser un objeto'),
 
-    body('cliente.razonSocial')
+    body('medicionesTecnicas.metrosDrop')
         .notEmpty()
-        .withMessage('La razón social es requerida')
-        .isLength({ min: 2, max: 200 })
-        .withMessage('La razón social debe tener entre 2 y 200 caracteres'),
+        .withMessage('Los metros de drop son requeridos')
+        .isString()
+        .withMessage('Los metros de drop deben ser una cadena')
+        .trim(),
 
-    body('cliente.contacto.nombre')
-        .optional()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('El nombre del contacto debe tener entre 2 y 100 caracteres'),
-
-    body('cliente.contacto.telefono')
-        .optional()
-        .matches(/^[+]?[\d\s-()]+$/)
-        .withMessage('Formato de teléfono inválido'),
-
-    body('cliente.contacto.email')
-        .optional()
-        .isEmail()
-        .withMessage('Email del contacto inválido')
-        .normalizeEmail(),
-
-    // Validaciones para ubicación
-    body('ubicacion.direccion')
+    body('medicionesTecnicas.potencia')
         .notEmpty()
-        .withMessage('La dirección es requerida')
-        .isLength({ min: 5, max: 200 })
-        .withMessage('La dirección debe tener entre 5 y 200 caracteres'),
+        .withMessage('La potencia es requerida')
+        .isString()
+        .withMessage('La potencia debe ser una cadena')
+        .trim(),
 
-    body('ubicacion.ciudad')
-        .notEmpty()
-        .withMessage('La ciudad es requerida')
-        .isLength({ min: 2, max: 100 })
-        .withMessage('La ciudad debe tener entre 2 y 100 caracteres'),
+    // Campos opcionales (pueden estar undefined)
+    body('id')
+        .optional(),
 
-    body('ubicacion.coordenadas.latitud')
-        .optional()
-        .isFloat({ min: -90, max: 90 })
-        .withMessage('Latitud debe estar entre -90 y 90'),
-
-    body('ubicacion.coordenadas.longitud')
-        .optional()
-        .isFloat({ min: -180, max: 180 })
-        .withMessage('Longitud debe estar entre -180 y 180'),
-
-    // Observaciones
-    body('observaciones')
-        .optional()
-        .isLength({ max: 1000 })
-        .withMessage('Las observaciones no pueden exceder 1000 caracteres'),
-
-    // Estado (opcional, se establece automáticamente si no se proporciona)
     body('estado')
+        .optional(),
+
+    body('fechaActualizacion')
+        .optional(),
+
+    body('fechaCreacion')
+        .optional(),
+
+    body('puntuacionCalculada')
+        .optional(),
+
+    body('ubicacion')
         .optional()
-        .isIn(Object.values(FSO_STATES))
-        .withMessage('Estado inválido')
 ];
 
 /**
@@ -297,7 +260,7 @@ const getFormValidation = [
 ];
 
 /**
- * Validaciones para listado de formularios
+ * Validaciones para listado de formularios con filtros avanzados
  */
 const listFormsValidation = [
     query('page')
@@ -315,15 +278,58 @@ const listFormsValidation = [
         .isIn(Object.values(FSO_STATES))
         .withMessage('Estado inválido'),
 
+    query('tipoFSO')
+        .optional()
+        .isIn(Object.values(FSO_TYPES))
+        .withMessage('Tipo de FSO inválido'),
+
+    query('companiaInspeccion')
+        .optional()
+        .isLength({ min: 1, max: 100 })
+        .withMessage('El nombre de la compañía debe tener entre 1 y 100 caracteres')
+        .trim(),
+
+    query('nombreTecnico')
+        .optional()
+        .isLength({ min: 1, max: 100 })
+        .withMessage('El nombre del técnico debe tener entre 1 y 100 caracteres')
+        .trim(),
+
+    query('fechaInicio')
+        .optional()
+        .isISO8601()
+        .withMessage('La fecha de inicio debe ser una fecha válida en formato ISO 8601'),
+
+    query('fechaFin')
+        .optional()
+        .isISO8601()
+        .withMessage('La fecha de fin debe ser una fecha válida en formato ISO 8601'),
+
+    query('search')
+        .optional()
+        .isLength({ min: 1, max: 100 })
+        .withMessage('El término de búsqueda debe tener entre 1 y 100 caracteres')
+        .trim(),
+
     query('sortBy')
         .optional()
-        .isIn(['createdAt', 'updatedAt', 'numeroOrden', 'companiaInspeccion', 'nombreTecnico'])
+        .isIn(['createdAt', 'updatedAt', 'numeroOrden', 'estado', 'tipoFSO', 'companiaInspeccion', 'nombreTecnico', 'puntuacionCalculada'])
         .withMessage('Campo de ordenamiento inválido'),
 
     query('sortOrder')
         .optional()
         .isIn(['asc', 'desc'])
-        .withMessage('Orden de clasificación inválido')
+        .withMessage('Orden de clasificación inválido'),
+
+    query('includeArchivos')
+        .optional()
+        .isIn(['true', 'false'])
+        .withMessage('includeArchivos debe ser true o false'),
+
+    query('includeHistorial')
+        .optional()
+        .isIn(['true', 'false'])
+        .withMessage('includeHistorial debe ser true o false')
 ];
 
 module.exports = {

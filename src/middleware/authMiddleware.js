@@ -27,7 +27,7 @@ const authenticateToken = async (req, res, next) => {
         }
 
         // Verificar token JWT
-        const decoded = jwt.verify(token, config.jwtSecret);
+        const decoded = jwt.verify(token, config.jwt.secret);
 
         // Buscar usuario en MongoDB
         const user = await User.findById(decoded.id).select('-password');
@@ -43,7 +43,7 @@ const authenticateToken = async (req, res, next) => {
         }
 
         // Verificar si el usuario está activo
-        if (!user.isActive) {
+        if (!user.active) {
             return res.status(401).json({
                 success: false,
                 error: {
@@ -57,9 +57,9 @@ const authenticateToken = async (req, res, next) => {
         req.user = {
             id: user._id.toString(),
             email: user.email,
-            nombre: user.nombre,
+            nombre: user.name,
             role: user.role,
-            isActive: user.isActive
+            isActive: user.active
         };
 
         // Log del acceso
@@ -149,16 +149,16 @@ const optionalAuth = async (req, res, next) => {
             return next();
         }
 
-        const decoded = jwt.verify(token, config.jwtSecret);
+        const decoded = jwt.verify(token, config.jwt.secret);
         const user = await User.findById(decoded.id).select('-password');
 
-        if (user && user.isActive) {
+        if (user && user.active) {
             req.user = {
                 id: user._id.toString(),
                 email: user.email,
-                nombre: user.nombre,
+                nombre: user.name,
                 role: user.role,
-                isActive: user.isActive
+                isActive: user.active
             };
         }
 

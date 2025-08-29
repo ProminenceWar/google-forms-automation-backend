@@ -26,7 +26,7 @@ const fsoValidators = {
                 'any.required': 'El número de orden es requerido'
             }),
         tipoFSO: Joi.string()
-            .valid('Instalación Fibra', 'Reparación Fibra', 'Instalación Cobre', 'Reparación Cobre', 'Inspección')
+            .valid('instalaciones', 'tickets_averia', 'retiro', 'traslados', 'reubicaciones', 'cambio_equipo', 'inspeccion')
             .required()
             .messages({
                 'any.only': 'Tipo de FSO inválido',

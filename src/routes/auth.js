@@ -21,14 +21,14 @@ const router = express.Router();
 const generateTokens = (userId) => {
     const accessToken = jwt.sign(
         { id: userId },
-        config.jwtSecret,
-        { expiresIn: config.jwtExpiry || '24h' }
+        config.jwt.secret,
+        { expiresIn: config.jwt.expiresIn || '1h' }
     );
 
     const refreshToken = jwt.sign(
         { id: userId, type: 'refresh' },
-        config.jwtRefreshSecret || config.jwtSecret,
-        { expiresIn: '7d' }
+        config.jwt.refreshSecret,
+        { expiresIn: config.jwt.refreshExpiresIn || '30d' }
     );
 
     return { accessToken, refreshToken };
@@ -122,7 +122,7 @@ router.post('/login',
                 email: email.toLowerCase()
             }).select('+password');
 
-            if (!user || !user.isActive) {
+            if (!user || !user.active) {
                 logger.warn('Intento de login con usuario inexistente o inactivo', {
                     email,
                     ip: req.ip,
@@ -466,7 +466,7 @@ router.post('/refresh', async (req, res) => {
         }
 
         // Verificar refresh token
-        const decoded = jwt.verify(refreshToken, config.jwtRefreshSecret || config.jwtSecret);
+        const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret);
 
         if (decoded.type !== 'refresh') {
             return res.status(401).json({
