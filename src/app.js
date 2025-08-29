@@ -23,12 +23,17 @@ const {
 
 // Importar rutas
 const authRoutes = require('./routes/auth');
+const authV2Routes = require('./routes/authV2'); // Nuevas rutas de autenticación
 const sessionRoutes = require('./routes/session');
 const formRoutes = require('./routes/forms');
 const formsV1Routes = require('./routes/formsV1');
 const filesV1Routes = require('./routes/files');
 const adminRoutes = require('./routes/admin');
+const adminTokensRoutes = require('./routes/adminTokens'); // Rutas admin para tokens
 const fsoStatsRoutes = require('./routes/fsoStats');
+
+// Importar middleware de mantenimiento de tokens
+const TokenMaintenanceMiddleware = require('./middleware/tokenMaintenance');
 
 // Crear aplicación Express
 const app = express();
@@ -323,7 +328,8 @@ app.get('/api', (req, res) => {
 });
 
 // Rutas de la API v1
-app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes); // Auth legacy
+app.use('/api/auth', authV2Routes); // Nuevas rutas de autenticación con refresh tokens
 app.use('/api/v1/sessions', sessionRoutes);
 app.use('/api/v1/forms', formsV1Routes);
 app.use('/api/v1/files', filesV1Routes);
@@ -331,6 +337,7 @@ app.use('/api/v1/fso', fsoStatsRoutes); // Rutas específicas para estadísticas
 
 // Rutas administrativas
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/tokens', adminTokensRoutes); // Gestión administrativa de tokens
 
 // Documentación Swagger
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerOptions));
@@ -378,6 +385,10 @@ async function startServer() {
     try {
         await initializeApp();
 
+        // Inicializar tareas de mantenimiento de tokens
+        TokenMaintenanceMiddleware.init();
+        logger.info('Token maintenance tasks initialized');
+
         const server = app.listen(config.server.port, () => {
             logger.info(`Server started successfully`, {
                 port: config.server.port,
@@ -389,6 +400,9 @@ async function startServer() {
             console.log(`🚀 Server running on port ${config.server.port}`);
             console.log(`📱 Health check: http://localhost:${config.server.port}/health`);
             console.log(`📋 API docs: http://localhost:${config.server.port}/api`);
+            console.log(`🛠️ swagger UI: http://localhost:${config.server.port}/api/docs`);
+            console.log(`🔐 Auth V2 endpoints: http://localhost:${config.server.port}/api/auth`);
+            console.log(`⚙️ Admin token management: http://localhost:${config.server.port}/api/admin/tokens`);
         });
 
         // Manejo de cierre graceful

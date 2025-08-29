@@ -1,15 +1,14 @@
 /**
- * @fileoverview Middleware de autenticación JWT
- * @description Manejo de autenticación con tokens JWT reales
+ * @fileoverview Middleware de autenticación JWT mejorado
+ * @description Manejo de autenticación con tokens JWT usando TokenService
  */
 
-const jwt = require('jsonwebtoken');
+const TokenService = require('../services/tokenService');
 const { User } = require('../models');
 const logger = require('../utils/logger');
-const config = require('../config');
 
 /**
- * Middleware de autenticación con JWT real
+ * Middleware de autenticación con JWT usando TokenService
  */
 const authenticateToken = async (req, res, next) => {
     try {
@@ -21,23 +20,25 @@ const authenticateToken = async (req, res, next) => {
                 success: false,
                 error: {
                     message: 'Token de acceso requerido',
-                    type: 'UNAUTHORIZED'
+                    type: 'UNAUTHORIZED',
+                    code: 'MISSING_TOKEN'
                 }
             });
         }
 
-        // Verificar token JWT
-        const decoded = jwt.verify(token, config.jwt.secret);
+        // Validar token usando TokenService
+        const decoded = await TokenService.validateAccessToken(token);
 
-        // Buscar usuario en MongoDB
-        const user = await User.findById(decoded.id).select('-password');
+        // Buscar usuario completo para el request
+        const user = await User.findById(decoded.id).select('-password -refreshTokens');
 
         if (!user) {
             return res.status(401).json({
                 success: false,
                 error: {
                     message: 'Usuario no válido',
-                    type: 'INVALID_USER'
+                    type: 'INVALID_USER',
+                    code: 'USER_NOT_FOUND'
                 }
             });
         }
@@ -48,38 +49,47 @@ const authenticateToken = async (req, res, next) => {
                 success: false,
                 error: {
                     message: 'Usuario inactivo',
-                    type: 'INACTIVE_USER'
+                    type: 'INACTIVE_USER',
+                    code: 'USER_INACTIVE'
                 }
             });
         }
 
-        // Agregar usuario a la request
+        // Agregar usuario a la request con información completa
         req.user = {
             id: user._id.toString(),
             email: user.email,
-            nombre: user.name,
+            name: user.name,
             role: user.role,
-            isActive: user.active
+            company: user.company,
+            isActive: user.active,
+            // Claims adicionales del token
+            iat: decoded.iat,
+            exp: decoded.exp
         };
 
-        // Log del acceso
-        logger.info('Usuario autenticado', {
+        // Log del acceso exitoso
+        logger.info('Usuario autenticado exitosamente', {
             userId: user._id,
             email: user.email,
+            role: user.role,
             ip: req.ip,
             userAgent: req.get('User-Agent'),
-            endpoint: `${req.method} ${req.originalUrl}`
+            endpoint: `${req.method} ${req.originalUrl}`,
+            tokenAge: Math.floor(Date.now() / 1000) - decoded.iat
         });
 
         next();
 
     } catch (error) {
+        // Manejo específico de errores de token
         if (error.name === 'JsonWebTokenError') {
             return res.status(401).json({
                 success: false,
                 error: {
-                    message: 'Token inválido',
-                    type: 'INVALID_TOKEN'
+                    message: 'Token malformado',
+                    type: 'INVALID_TOKEN',
+                    code: 'MALFORMED_TOKEN'
                 }
             });
         }
@@ -89,12 +99,33 @@ const authenticateToken = async (req, res, next) => {
                 success: false,
                 error: {
                     message: 'Token expirado',
-                    type: 'EXPIRED_TOKEN'
+                    type: 'EXPIRED_TOKEN',
+                    code: 'TOKEN_EXPIRED'
                 }
             });
         }
 
-        logger.error('Error en autenticación:', error);
+        if (error.name === 'NotBeforeError') {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    message: 'Token no válido aún',
+                    type: 'INVALID_TOKEN',
+                    code: 'TOKEN_NOT_ACTIVE'
+                }
+            });
+        }
+
+        // Log del error de autenticación
+        logger.error('Error en autenticación:', {
+            error: error.message,
+            type: error.name,
+            stack: error.stack,
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            endpoint: `${req.method} ${req.originalUrl}`
+        });
+
         res.status(500).json({
             success: false,
             error: {
